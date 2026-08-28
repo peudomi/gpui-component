@@ -269,9 +269,15 @@ impl Element for AnimatedAccordionPanel {
         }
 
         // Masked here too, so the hidden content takes no mouse events.
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
-            self.child.prepaint_at(bounds.origin, window, cx);
-        });
+        window.with_content_mask(
+            Some(ContentMask {
+                bounds,
+                ..Default::default()
+            }),
+            |window| {
+                self.child.prepaint_at(bounds.origin, window, cx);
+            },
+        );
     }
 
     fn paint(
@@ -284,9 +290,15 @@ impl Element for AnimatedAccordionPanel {
         window: &mut Window,
         cx: &mut App,
     ) {
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
-            self.child.paint(window, cx);
-        });
+        window.with_content_mask(
+            Some(ContentMask {
+                bounds,
+                ..Default::default()
+            }),
+            |window| {
+                self.child.paint(window, cx);
+            },
+        );
     }
 }
 

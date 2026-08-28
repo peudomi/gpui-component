@@ -234,7 +234,11 @@ impl Element for WebViewElement {
         _: &mut App,
     ) {
         let bounds = hitbox.clone().map(|h| h.bounds).unwrap_or(bounds);
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
+        let content_mask = ContentMask {
+            bounds,
+            ..Default::default()
+        };
+        window.with_content_mask(Some(content_mask), |window| {
             let webview = self.view.clone();
             window.on_mouse_event(move |event: &MouseDownEvent, _, _, _| {
                 if !bounds.contains(&event.position) {
