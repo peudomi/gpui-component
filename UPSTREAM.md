@@ -2,9 +2,10 @@
 
 This repository is a fork of `longbridge/gpui-component` that builds against the
 GPUI fork [`peudomi/gpui`](https://github.com/peudomi/gpui) instead of the
-`gpui-pre-*` snapshots upstream takes from crates.io. Everything this fork
-changes exists only to make upstream's code compile and behave on top of
-`peudomi/gpui`. Keep that diff as small as possible.
+`gpui-pre-*` snapshots upstream takes from crates.io. Almost everything this
+fork changes exists only to make upstream's code compile and behave on top of
+`peudomi/gpui`; fork change 5 is the one hook the app needs. Keep that diff as
+small as possible.
 
 ## Branch structure
 
@@ -15,7 +16,7 @@ to the upstream state, use the `upstream/main` remote-tracking ref after
 ## Fork changes
 
 Show them with `git diff $(git merge-base HEAD upstream/main) HEAD`. They fall
-into four kinds, and a merge must keep all of them:
+into five kinds, and a merge must keep all of them:
 
 1. **GPUI source.** The workspace dependency keys for crates that
    `peudomi/gpui` provides point at it as a git dependency with no `rev`
@@ -51,6 +52,15 @@ into four kinds, and a merge must keep all of them:
    `extern crate gpui_kit as gpui;` at their crate root (`crates/story`,
    `examples/tig`), and `IntoPlot`'s package lookup in
    `crates/component-macros/src/crate_path.rs` includes `gpui`.
+
+5. **Closed dock extent hook.** `DockAreaRenderer::closed_dock_extent` in
+   `crates/base/src/dock/dock_area.rs` lets a renderer decide how much room a
+   closed dock keeps. Its default returns `CLOSED_BOTTOM_STRIP` for the bottom
+   dock and zero otherwise, so upstream's behavior is unchanged. Base reads it
+   in `render_dock` for a closed dock, and in `resize_dock` and
+   `end_dock_resize` where upstream uses `CLOSED_BOTTOM_STRIP`. If upstream
+   adds another use of `CLOSED_BOTTOM_STRIP` in the resize or render path,
+   route it through the hook too.
 
 ## Merge procedure
 
@@ -131,7 +141,7 @@ review branches.
 4. **Land on `main` directly** only if all of these hold:
    - no content conflict (`UU`/`AA`) other than root `Cargo.toml`/`Cargo.lock`
      and `ContentMask` literals resolved as described above,
-   - no hand edit beyond fork changes 1, 2 and 4 (any fork change 3 needs review),
+   - no hand edit beyond fork changes 1, 2, 4 and 5 (any fork change 3 needs review),
    - every Linux check passes, and the macOS check found no real error.
 5. **Otherwise ask for review**: commit as far as it got, push it to
    `claude/upstream-sync-<YYYY-MM-DD>`, leave `main` untouched, and notify the
