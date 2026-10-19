@@ -15,7 +15,7 @@ to the upstream state, use the `upstream/main` remote-tracking ref after
 ## Fork changes
 
 Show them with `git diff $(git merge-base HEAD upstream/main) HEAD`. They fall
-into three kinds, and a merge must keep all of them:
+into four kinds, and a merge must keep all of them:
 
 1. **GPUI source.** The workspace dependency keys for crates that
    `peudomi/gpui` provides point at it as a git dependency with no `rev`
@@ -34,7 +34,9 @@ into three kinds, and a merge must keep all of them:
    (`gpui-pre` to `gpui`, `gpui-pre-platform` to `gpui_platform`, and so on).
    Every other dependency (`sum-tree`, `reqwest`, `gpui-fast*`, ...) follows
    upstream, unless a type crosses into a `peudomi/gpui` crate and compilation
-   requires the same source.
+   requires the same source. An exact pin that cannot resolve against the
+   dependencies of `peudomi/gpui` is raised to the version they need (for
+   example `wasm-bindgen` in `crates/base/examples/wasm/Cargo.toml`).
 2. **Rounded content masks.** `peudomi/gpui` adds `corner_radii` to
    `gpui::ContentMask`, so every struct literal needs `..Default::default()`:
    `ContentMask { bounds, ..Default::default() }`.
@@ -42,6 +44,13 @@ into three kinds, and a merge must keep all of them:
    ahead of the snapshot upstream compiles against. Minimal source adaptations
    for those differences live here (for example `9bd1745e`). Prefer the shape
    Zed's own callers use for the new API.
+4. **No `gpui-kit` facade in GPUI macros.** Upstream's `gpui-pre-macros`
+   rewrites `gpui::` paths in macro output to `gpui_kit::`; `peudomi/gpui`'s
+   `gpui_macros` does not. This fork does not support consumers that depend
+   only on `gpui-kit`. Workspace crates that do so and use GPUI macros get
+   `extern crate gpui_kit as gpui;` at their crate root (`crates/story`,
+   `examples/tig`), and `IntoPlot`'s package lookup in
+   `crates/component-macros/src/crate_path.rs` includes `gpui`.
 
 ## Merge procedure
 
@@ -60,7 +69,8 @@ git merge upstream/main
 - **Files the fork changed for `ContentMask`**: take upstream's side and add
   `..Default::default()` back to each literal.
 - **Compile errors after the merge**: a missing `corner_radii` field is fork
-  change 2. Anything else that comes from GPUI is fork change 3; fix it in the
+  change 2. `cannot find module or crate gpui` from a GPUI macro in a crate
+  that depends only on `gpui-kit` is fork change 4. Anything else that comes from GPUI is fork change 3; fix it in the
   smallest way and note it in the commit.
 
 Do not edit upstream's CI scripts or workflows. Checks that assume `gpui-pre`
@@ -77,14 +87,22 @@ verify, and commit as `chore: update gpui lock`.
 On Linux, after `script/install-linux.sh` for the system packages:
 
 ```shell
-cargo check --workspace --exclude gpui-shell
-cargo test --workspace --exclude gpui-shell --features gpui-component-story/test-support
+cargo check --workspace --exclude gpui-shell --exclude webview
+cargo test --workspace --exclude gpui-shell --exclude gpui-kit-recipes \
+  --exclude gpui-kit --features gpui-component-story/test-support $TEST_EXCLUDES
+cargo test -p gpui-kit --features test-support --lib --test ui
 ```
 
 These mirror the Linux `lint` and `test` jobs in `.github/workflows/ci.yml`
-without `--locked`. When upstream changes those jobs, follow them, leaving out
-the example crates as the `test` job does and skipping steps that need a real
+without `--locked`; `$TEST_EXCLUDES` is the example-crate list the `test` job
+computes. When upstream changes those jobs, follow them, leaving out the
+example crates as the `test` job does and skipping steps that need a real
 renderer.
+
+Because of fork change 4, the tests that check `gpui-kit` works without a
+direct GPUI dependency are known failures and are left out: every test target
+of `gpui-kit-recipes`, and the `integration` target of `gpui-kit`. Do not add
+the alias to them; that would defeat what they test.
 
 ## Automated daily sync
 
@@ -113,7 +131,7 @@ review branches.
 4. **Land on `main` directly** only if all of these hold:
    - no content conflict (`UU`/`AA`) other than root `Cargo.toml`/`Cargo.lock`
      and `ContentMask` literals resolved as described above,
-   - no hand edit beyond fork changes 1 and 2 (any fork change 3 needs review),
+   - no hand edit beyond fork changes 1, 2 and 4 (any fork change 3 needs review),
    - every Linux check passes, and the macOS check found no real error.
 5. **Otherwise ask for review**: commit as far as it got, push it to
    `claude/upstream-sync-<YYYY-MM-DD>`, leave `main` untouched, and notify the
