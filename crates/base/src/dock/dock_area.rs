@@ -1325,8 +1325,7 @@ impl DockArea {
             return;
         };
         let was_open = pane.dock.is_open();
-        if placement == DockPlacement::Bottom && pane.dock.is_collapsible() && size < PANEL_MIN_SIZE
-        {
+        if strip > px(0.) && pane.dock.is_collapsible() && size < PANEL_MIN_SIZE {
             pane.dock.set_open(size > strip);
             pane.dock.set_live_size(Some(size.max(strip)));
         } else {

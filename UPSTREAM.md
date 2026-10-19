@@ -58,7 +58,10 @@ into five kinds, and a merge must keep all of them:
    closed dock keeps. Its default returns `CLOSED_BOTTOM_STRIP` for the bottom
    dock and zero otherwise, so upstream's behavior is unchanged. Base reads it
    in `render_dock` for a closed dock, and in `resize_dock` and
-   `end_dock_resize` where upstream uses `CLOSED_BOTTOM_STRIP`. If upstream
+   `end_dock_resize` where upstream uses `CLOSED_BOTTOM_STRIP`. A dock may be
+   dragged below its minimum and shut only when its closed extent is above
+   zero (upstream: only the bottom dock), since a dock that keeps nothing also
+   loses the handle that would drag it open again. If upstream
    adds another use of `CLOSED_BOTTOM_STRIP` in the resize or render path,
    route it through the hook too.
 
