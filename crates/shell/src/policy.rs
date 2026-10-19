@@ -43,7 +43,11 @@
 //! explicitly, because "under whose authority is this code being loaded" is a
 //! question the caller has to answer rather than inherit.
 
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::{
+    cell::RefCell,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use crate::{
     capability::Capabilities,
@@ -51,12 +55,28 @@ use crate::{
     storage::Storage,
 };
 
+/// The application name a policy carries when the host named none.
+const DEFAULT_APPLICATION: &str = "app";
+
 /// The authority one application or plugin runs under.
 ///
 /// Built once by the host and shared by handle: a view holds one, a call frame
 /// borrows it, and two plugins hold two.
 pub struct Policy {
+    /// The name this application's panels are filed under.
+    ///
+    /// A dock layout persists a panel by name, and two applications that both
+    /// call a panel `inbox` must not collide in one layout file — so the name
+    /// is namespaced by the application, and *this* is where the application
+    /// half comes from. The policy carries it rather than the runtime because
+    /// one runtime can host several plugins, and because a policy already
+    /// answers "under whose authority?"; "filed under whose name?" is the same
+    /// question asked of persistence.
+    application: Rc<str>,
     capabilities: Capabilities,
+    /// The application's own data directory, shown to script as
+    /// `process.dataDir`. A path, not a grant: reaching it still needs a root.
+    data_dir: Option<Rc<Path>>,
     /// A live handle, not a value — and deliberately unlike `capabilities`.
     ///
     /// A grant is frozen with the code it was given to: that is the whole point
@@ -98,16 +118,54 @@ impl Policy {
     /// A policy that permits nothing. Every grant is added deliberately.
     pub fn new() -> Self {
         Self {
+            application: Rc::from(DEFAULT_APPLICATION),
             capabilities: Capabilities::default(),
+            data_dir: None,
             modules: Rc::new(RefCell::new(Rc::new(HostModules::default()))),
             store: Rc::new(RefCell::new(None)),
             session: Rc::new(RefCell::new(Some(Storage::in_memory()))),
         }
     }
 
+    /// Names the application this policy answers for.
+    ///
+    /// A host that loads one application never needs to call it: the default
+    /// is `app`, and a layout file written by a single-application host has
+    /// nothing to collide with. A plugin host passes the plugin's manifest id,
+    /// which is already unique among the plugins it loaded.
+    pub fn with_application(mut self, name: impl AsRef<str>) -> Self {
+        let name = name.as_ref().trim();
+        self.application = if name.is_empty() {
+            Rc::from(DEFAULT_APPLICATION)
+        } else {
+            Rc::from(name)
+        };
+        self
+    }
+
+    /// The name this application's panels are filed under.
+    pub fn application(&self) -> &str {
+        &self.application
+    }
+
     pub fn with_capabilities(mut self, capabilities: Capabilities) -> Self {
         self.capabilities = capabilities;
         self
+    }
+
+    /// Names the application's data directory, which script reads as
+    /// `process.dataDir`.
+    ///
+    /// The host places the directory, so only the host can say where it is —
+    /// and an application that writes its own files there, or shows the user
+    /// where their data lives, otherwise has to guess.
+    pub fn with_data_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.data_dir = Some(Rc::from(path.into()));
+        self
+    }
+
+    pub fn data_dir(&self) -> Option<&Path> {
+        self.data_dir.as_deref()
     }
 
     /// Names the `localStorage` file and reads it.
@@ -224,7 +282,12 @@ impl Policy {
     /// views that can call it, and a store has to stay one cache over one file.
     pub(crate) fn duplicate(&self) -> Self {
         Self {
+            // Carried, not reset: the name is what the application's persisted
+            // panels are filed under, and a copy that renamed them would lose
+            // the layout the user had.
+            application: self.application.clone(),
             capabilities: self.capabilities.clone(),
+            data_dir: self.data_dir.clone(),
             modules: self.modules.clone(),
             store: self.store.clone(),
             session: self.session.clone(),
@@ -236,6 +299,7 @@ impl Policy {
 mod tests {
     use super::*;
     use crate::capability::Capabilities;
+    use gpui::IntoElement as _;
 
     fn reading(root: &str) -> Policy {
         Policy::new().with_capabilities(Capabilities::new().read_roots([PathBuf::from(root)]))
@@ -285,6 +349,20 @@ mod tests {
             Rc::ptr_eq(&held.modules(), &default().modules()),
             "the registry is one live handle, not a copy per holder"
         );
+    }
+
+    #[test]
+    fn two_policies_do_not_share_components() {
+        let first = Policy::new()
+            .with_host_module(
+                crate::HostModule::new("cards")
+                    .component("Quote", |_, _, _| gpui::div().into_any_element()),
+            )
+            .expect("first policy");
+        let second = Policy::new();
+
+        assert!(first.modules().get("cards").is_ok());
+        assert!(second.modules().get("cards").is_err());
     }
 
     /// One file, one cache, one write queue. Two would answer `get` differently

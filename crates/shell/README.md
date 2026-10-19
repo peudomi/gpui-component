@@ -1,6 +1,6 @@
 # gpui-shell
 
-`gpui-shell` exists to make a Rust [GPUI](https://gpui.rs) application
+`gpui-shell` exists to make a Rust GPUI application
 **extensible in JavaScript**.
 
 **The primary goal is plugin extension.** A host application compiles and ships
@@ -12,8 +12,11 @@ redistribute, and no fork for a contributor who only wants to add a panel.
 also how a plugin is developed: get the script running standalone, then mount
 it in a host.
 
-**It is not an Electron or a Tauri.** There is no WebView, no DOM, no HTML or
-CSS, no browser engine, and no Node.js. A script never renders. It describes an
+**It is not an Electron or a Tauri.** The interface is not a web page: there is
+no DOM, no HTML or CSS, and no Node.js. A `WebView` component can show a web
+page as one element of a GPUI layout, the way an image does, but the
+application around it is never drawn by a browser engine. A script never
+renders. It describes an
 interface once, and Rust replays that description into real GPUI elements on
 every frame after it — the same element model a Rust application on `gpui-base`
 builds, through the same GPU renderer. JavaScript is the application layer here,
@@ -26,8 +29,10 @@ logic. JavaScript is the default scripting language.
 
 Its design is specified in [`docs/gpui-shell.md`](../../docs/gpui-shell.md).
 This crate is at milestone M0: a feasibility baseline, not a stable interface.
-The machinery below a plugin is built and tested, but not yet reachable from a
-script: `gpui_shell::dock` is crate-private and the CLI does not use
+A script now contributes dockable panels and draws a dock's chrome —
+`gpui_shell::dock` is public, and `DockArea`, `dock_area(...)` and
+`DockArea.register_panel` are part of the script surface. What is still missing
+above them is the rest of the contribution registry and a CLI that uses
 `PluginManager`, so the standalone path is what runs end to end today.
 
 ## Base-First: The Script Owns Presentation
@@ -62,14 +67,17 @@ This is the same trade the Rust side makes when an application builds directly
 on `gpui-base` instead of `gpui-component`. Colors are named as semantic theme
 tokens, so a shared visual language stays available without the runtime making
 visual decisions on the application's behalf. Applications that want ready-made
-product visuals wait for a `gpui-component` module, a later milestone.
+product visuals import the `gpui-component` script module, which this crate
+provides through its default `components` feature
+(`gpui_shell::components`). Run `cargo run -p gpui-shell -- run examples/js_story`
+for the styled gallery; build without the feature for a Base-only runtime.
 
 ## Quick Start
 
 Run the bundled example from the repository root:
 
 ```bash
-cargo run -p gpui-shell -- examples/js_todolist
+cargo run -p gpui-shell -- run examples/js_todolist
 ```
 
 The runtime loads `main.js` from the given directory, takes the view class it
@@ -77,7 +85,7 @@ default-exports, and mounts one instance of it as the window's root view:
 
 ```js
 // main.js
-import { View } from "gpui";
+import { View, div } from "gpui-kit";
 import { v_flex, Button, InputState } from "gpui-base";
 
 export default class Notes extends View {
@@ -112,8 +120,44 @@ toast, icons, and storage that degrades to memory when it is not granted.
 
 For a whole product rather than a demonstration — OAuth, a live WebSocket quote
 feed, a virtualized watchlist, retained nested views, and its own Rust host —
-see [longbridge/gpui-shell-longbridge](https://github.com/longbridge/gpui-shell-longbridge),
+see [longbridge/longbridge-lite](https://github.com/longbridge/longbridge-lite),
 the largest application written against this runtime.
+
+### Installing the runtime and applications
+
+Releases ship a prebuilt `gpui-shell` (built with the `gpui-component`
+catalog) for macOS, Linux and Windows:
+
+```bash
+curl -fsSL https://gpui-kit.com/shell/install.sh | sh
+```
+
+To follow `main` ahead of a release, build it from Git instead (into
+`~/.cargo/bin`; run it again to update):
+
+```bash
+cargo install --git https://github.com/longbridge/gpui-kit gpui-shell --locked
+```
+
+It runs one application per process and has no interface of its own:
+
+```bash
+gpui-shell run clock          # ~/.gpui-shell/apps/clock
+gpui-shell run -d ~/dev/clock # a directory (also: any argument with a path separator)
+gpui-shell                    # the packaged application beside the executable, else this help
+gpui-shell list               # installed applications and what they ask for
+gpui-shell agents -d ./clock  # write AGENTS.md: instructions for coding agents
+gpui-shell bundle -d ./clock  # dist/: a .app, a Linux .tar.gz + install.sh, or a portable Windows .zip
+```
+
+`GPUI_SHELL_HOME` replaces `~/.gpui-shell`. With no argument the executable
+runs `Contents/Resources/app` inside a macOS bundle, or `app` beside itself, so
+a standalone desktop application is this binary plus a directory of scripts.
+`bundle` makes one: on macOS and Linux it packages the scripts alone, and its
+launcher uses an installed `gpui-shell`, or downloads the release that made it,
+and runs the application with `run --packaged`; on Windows it is a portable
+folder whose executable is `gpui-shell.exe` itself. See [Getting Started](https://gpui-kit.com/shell/getting-started)
+and [Packaging](https://gpui-kit.com/shell/packaging) for details.
 
 ### Checking an application without running it
 
@@ -123,21 +167,23 @@ missing:
 ```bash
 cargo run -p gpui-shell -- check examples/js_todolist    # exit 0 or 1
 cargo run -p gpui-shell -- check examples/js_todolist --print-spec
-cargo run -p gpui-shell -- types examples/js_todolist    # writes gpui.d.ts
+cargo run -p gpui-shell -- types examples/js_todolist    # writes gpui-kit.d.ts
 ```
 
-`check` loads and renders the application once without showing a window. It
-reports syntax errors, unresolved imports, a missing or malformed default
-export, unknown style methods with a suggestion, wrongly typed style arguments,
-and an element used twice — each with the script's own stack. `types` writes
-TypeScript declarations generated from the same tables the runtime dispatches
-through, so an editor catches a mistyped style method before it runs.
+`check` loads the application, builds its description, and materializes eager
+native elements in a hidden window. It exits nonzero for load, render, or
+registered-component materialization errors, including invalid structured
+children and unsupported styles. It does not validate layout, paint, deferred
+slots, nested view renders, or later interactions and asynchronous states.
+`--print-spec` prints the same description that was materialized. `types` writes
+TypeScript declarations from the runtime's registration tables so an editor
+can catch invalid calls before execution.
 
 ### Working on an application
 
 ```bash
-cargo run -p gpui-shell -- examples/js_todolist --watch
-cargo run -p gpui-shell -- examples/js_todolist --dev    # implies --watch
+cargo run -p gpui-shell -- dev examples/js_todolist            # reload, with the debug log
+cargo run -p gpui-shell -- run examples/js_todolist --watch    # reload only
 ```
 
 A reload re-reads every module, entry included. If the new code fails to load,
@@ -160,7 +206,7 @@ camelCase one is script code.
 Each module carries what its own crate provides:
 
 ```js
-import { View, div, svg, image } from "gpui";
+import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Button, Link, Checkbox, Switch } from "gpui-base";
 import { fps_monitor } from "gpui-fps";
 ```
@@ -171,7 +217,7 @@ import { fps_monitor } from "gpui-fps";
 | `h_flex()` / `v_flex()` | function | A row / column flex element |
 | `value` | function | A text element |
 | `svg(path)` / `image(path)` | functions | A theme-tinted vector icon / full-colour application asset |
-| `fps_monitor()` | function | The native `gpui-fps` performance HUD; place it in a `relative()` parent |
+| `fps_monitor()` | function | The native `gpui-fps` performance HUD; passive by default, with `.continuous(true)` for a sustained-frame test |
 | `Button.new(id)` | type | A base `Button`: activation, focus, disabled and selected state, no styling |
 | `Link.new(id)` | type | A base external link; pair it with `.href("https://…")` |
 | `Checkbox.new(id)` / `Switch.new(id)` | type | A base controlled toggle, no styling |
@@ -232,7 +278,7 @@ semantic token name — `background`, `foreground`, `surface`,
 `surface_foreground`, `primary`, `primary_foreground`, `secondary`,
 `secondary_foreground`, `muted`, `muted_foreground`, `accent`,
 `accent_foreground`, `destructive`, `destructive_foreground`, `border`, `input`,
-`ring` — or a `#rrggbb` literal. Passing values from
+`ring`, `selection` — or a `#rrggbb` literal. Passing values from
 `cx.theme().colors` is preferred. Semantic token name strings remain
 accepted for compatibility; a literal bypasses the theme.
 
@@ -265,6 +311,84 @@ state, sampling, interruption, reduced motion, and frame requests stay native.
 
 Disabled, selected and checked appearance is the caller's to draw; the base
 layer only reports the state.
+
+### WebView
+
+`"gpui-component"` exports `WebViewState` and `WebView` (the default `webview`
+feature). The state owns a native web page — WKWebView, WebView2 or WebKitGTK —
+so the document and its history survive renders; `WebView` places it in the
+layout and takes shell style for its size.
+
+```js
+import { WebView, WebViewState } from "gpui-component";
+
+// In init():
+this.page = WebViewState.new("https://gpui-kit.com");
+
+// In render():
+WebView.new(this.page)
+  .flex_1()
+  .on_load((url, cx) => this.page.evaluate_script("window.ipc.postMessage(document.title)"))
+  .on_message((title, cx) => { this.title = title; cx.notify(); });
+```
+
+| Method | On | Description |
+| --- | --- | --- |
+| `load_url(url)` / `url()` | `WebViewState` | Navigate, and read the current address |
+| `back()` / `forward()` / `reload()` | `WebViewState` | History and reload |
+| `evaluate_script(js)` | `WebViewState` | Run JavaScript in the page; the page answers through a message |
+| `set_zoom(zoom)` / `zoom()` | `WebViewState` | Page zoom, where `1` is the natural size; the engine scales the page and keeps it across navigations |
+| `set_theme(theme)` | `WebViewState` | The scheme the page sees in `prefers-color-scheme`. By default (`"auto"`) it follows the application theme's appearance; `"light"`, `"dark"` or `"system"` override it. On Linux it is GTK's process-wide preference, shared by every page |
+| `.on_load(handler)` | `WebView` | `handler(url, cx)` after each document finishes loading |
+| `.on_message(handler)` | `WebView` | `handler(text, cx)` for each `window.ipc.postMessage(text)` from the page |
+
+Only `http` and `https` documents load, whether the script or the page
+navigates. Loading is not gated by a capability. The feature builds the runtime
+on GPUI Fast; on Linux the page needs an X11 or XWayland window (start with
+`WAYLAND_DISPLAY=` in a Wayland session), and on Windows it draws above GPUI
+content it overlaps. [`examples/js_webview`](../../examples/js_webview/main.js)
+is a small browser built on it.
+
+### MessageScroller
+
+`MessageScrollerState.new(count)` is a virtualized transcript's rows, scroll
+position and tail following; `MessageScroller` places it and asks the script
+for each visible row by index. A transcript changes while it is on screen, so
+the state is edited in place rather than recreated, which would drop the
+reader's position.
+
+```js
+import { MessageScroller, MessageScrollerState } from "gpui-component";
+
+// In init():
+this.rows = [];
+this.scroller = MessageScrollerState.new(0);
+
+// When a message arrives:
+this.rows.push(message);
+this.scroller.append(1);
+
+// In render():
+MessageScroller.new("transcript", this.scroller, (index) => renderRow(this.rows[index]))
+  .flex_1()
+  .scrollbar(true);
+```
+
+| Method | Description |
+| --- | --- |
+| `append(count)` / `prepend(count)` | Add rows at the end, or at the start keeping the reader's position |
+| `splice(range, count)` | Replace the rows in `range` (`{ start, end }`) with `count` rows |
+| `reset(count)` | Start over with `count` rows and follow the tail |
+| `remeasure()` / `remeasure_items(range)` | Measure rows again after their content changed size |
+| `scroll_to_item(index)` / `scroll_to_end()` | Scroll to a row, or to the end and follow the tail |
+| `item_count()` | The number of rows |
+| `is_following_tail()` / `is_scrolled_up()` | Whether new rows keep the end in view, and whether the reader has scrolled away from it |
+| `logical_scroll_top()` | `{ item_ix, offset_in_item }`: the row at the top of the viewport and how far into it the list is scrolled |
+
+The edits that take a range or an index return `false`, and change nothing,
+when it is outside the current rows. The arguments are whole non-negative
+numbers; anything else throws. The reads may be called in `render`; the edits
+may not.
 
 ### Views
 
@@ -299,8 +423,11 @@ grant the CLI installs in `gpui-shell.json`:
   "id": "com.example.viewer",
   "name": "Viewer",
   "version": "1.0.0",
-  "shell-version": "0.1.0",
+  "shell-version": "0.6.0",
   "entry": "main.js",
+  "dependencies": {
+    "omarchy-ui": "huacnlee/omarchy-ui"
+  },
   "capabilities": {
     "fs": { "read": ["${pluginDir}"], "write": ["${dataDir}"] },
     "network": {
@@ -319,6 +446,50 @@ grant the CLI installs in `gpui-shell.json`:
 }
 ```
 
+Git dependencies are fetched before the entry module is evaluated. Import the
+map key as a bare module:
+
+```js
+import { label, style } from "omarchy-ui";
+```
+
+A string value may be strict GitHub shorthand (`"owner/repository"` or
+`"owner/repository#ref"`) or a full Git URL
+(`"https://github.com/owner/repository#ref"`). GitHub shorthand without a
+fragment selects `main`; a full URL without one selects the remote's HEAD. A
+fragment may name a branch, tag, or commit-ish such as a commit ID. Moving
+references are fetched on every application load, while a commit ID keeps
+selecting the same commit.
+
+For string dependencies, gpui-shell reads the root `package.json` after the
+immutable checkout is ready. A string `main` selects the package entry; a
+missing file or missing `main` defaults to `index.js`. Malformed metadata, a
+non-string `main`, or an entry that is missing, not a file, or escapes the
+checkout fails the application load before its JavaScript entry executes.
+
+The legacy object form remains supported without changes. It requires exactly
+one explicit `branch` or `tag`, and its repository-relative `entry` still
+defaults to `index.js`:
+
+```json
+{
+  "omarchy-ui": {
+    "git": "https://github.com/huacnlee/omarchy-ui",
+    "tag": "v1.2.0",
+    "entry": "src/public.js"
+  }
+}
+```
+
+Dependencies live below `~/.gpui-shell/cache/dependencies/`. A per-remote lock
+serializes updates to the local mirror; immutable commit-addressed checkouts
+keep concurrent launches and older hot-reload generations isolated. The exact
+fragment-free URL is the cache and remote identity. Its raw configured origin
+is verified even when Git's `url.*.insteadOf` changes the effective fetch URL.
+Git commands are non-interactive and bounded to 30 seconds. Relative imports
+inside a package remain confined to its checkout. Fetching requires `git` on
+the host and happens before script capabilities apply.
+
 `network.hosts` grants the host to HTTP, raw TCP, and WebSocket clients;
 `network.http` narrows HTTP to a scheme, effective port, listed methods and
 paths without granting TCP or WebSocket access. Its default scheme is `https`
@@ -328,6 +499,18 @@ non-default endpoint. `fetch` supports GET/POST, safe headers, string or
 limits. Every redirect target must be granted; HTTPS downgrade is refused, as
 are cross-origin POST replays and cross-origin redirects carrying Authorization
 or any caller-supplied header.
+
+Images in `TextView.html` and `TextView.markdown` use the document's captured
+network grant, including inline images and intrinsic-size measurement. Only
+absolute HTTP(S) URLs authorized for GET can load; relative, scheme-less,
+`data:`, `file:`, custom-scheme and credential-bearing URLs are refused, as
+is an SVG image whose `<image>` references a file. Each
+redirect is re-authorized, with at most 10 redirects and no HTTPS downgrade.
+Requests have a 30-second timeout and an 8 MiB response limit. Image loading
+never falls back to the host's unrestricted URI loader. Each TextView and
+policy identity has its own cache, released with its native element state;
+a broader grant cannot populate a cache used by a narrower grant. The ordinary
+application-asset `image(path)` API and default link handling are unchanged.
 
 Import `WebSocket` from `websocket`; `WebSocket.connect(url, { headers })` resolves after the handshake and returns
 async `read`, `write`, and `close` methods for text and binary messages. Frames
@@ -381,7 +564,7 @@ an internal trait with opaque handles, and a fake engine to compile it against �
 is worth doing when there is a second engine to write, and is make-work before
 that.
 
-## Not Here Yet
+## Host capabilities
 
 Present today: the element and style surface, state styles (`hover` / `active` /
 `focus`), `Button`, `Checkbox`, `Switch`, retained `InputState` with input
@@ -394,35 +577,68 @@ declarations.
 Deliberately absent:
 
 - `gpui.open_window` and multi-window applications; the host opens the window.
-- Select, combobox, tabs, list, table and tree bindings.
-- Charts, the code editor and its LSP surface, and WebView — these stay in Rust
-  on purpose; binding a trait-and-generics interface across a language boundary
-  costs more than it returns.
-- Packaging and installing an application as a distributable archive.
+- Full Rust API parity: script support is explicitly tracked per surface, not
+  inferred from the existence of a Rust component. The styled adapter already
+  supplies collection, select, table, tree, chart, and editor bindings. Consult
+  [the component inventory](component-inventory.json) and
+  [the gallery](../../examples/js_story/README.md) for available and deferred
+  surfaces; do not assume every delegate or LSP facility is exposed.
+- Packaging tooling: `bundle` makes macOS and Linux packages that download the
+  runtime, and portable Windows folders; a standalone macOS or Linux package
+  carrying the binary is still assembled by hand.
 
 The design, what is implemented, and what is not are in
 [`docs/gpui-shell.md`](../../docs/gpui-shell.md).
 
 ## Types for the Script
 
-`import ... from "gpui"` is opaque without declarations, and the style surface
+`import ... from "gpui-kit"` is opaque without declarations, and the style surface
 is far too large to memorize. **There is nothing to run.** Every `gpui-shell`
-invocation — running an application, `check`, `types` — writes `gpui.d.ts` into
+invocation — running an application, `check`, `types` — writes `gpui-kit.d.ts` into
 each directory that imports a built-in module, from the runtime it is about to
 use:
 
 ```bash
-cargo run -p gpui-shell -- path/to/app           # runs it, and writes them
+cargo run -p gpui-shell -- run path/to/app           # runs it, and writes them
 cargo run -p gpui-shell -- check path/to/app     # checks it, and writes them
 cargo run -p gpui-shell -- types path/to/app     # writes them and nothing else
 ```
 
-One file, three modules: `"gpui"` for GPUI's own elements and what the runtime
+One file, built-in modules for each runtime layer: `"gpui-kit"` for GPUI's own elements and what the runtime
 adds, `"gpui-base"` for gpui-base's layout helpers, components and theme, and
-`"gpui-fps"` for its performance overlay. A name belongs to exactly one of them,
-so an import says which layer a script depends on.
+`"gpui-fps"` for its performance overlay. `"gpui"` is a compatibility alias for
+`"gpui-kit"`, so `import { div } from "gpui"` uses the same binding.
 
-Add `gpui.d.ts` to `.gitignore`; the file's own first line says so.
+Add `gpui-kit.d.ts` to `.gitignore`; the file's own first line says so.
+
+### Dependencies an editor can see
+
+The declarations describe the runtime. A Git dependency the manifest declares is
+the rest of what a script imports, and an editor answers `import { style } from
+"omarchy-ui"` by walking `node_modules` up from the importing file — it knows
+nothing about `gpui-shell.json`. Left alone, a correct import is underlined as a
+module it cannot find, and every name behind it has no type, no parameter hints
+and no documentation.
+
+So the same invocations link each materialized checkout into the application's
+`node_modules` under the name the manifest gave it, and scaffold a
+`jsconfig.json` when the directory has neither that nor a `tsconfig.json`. The
+editor reads the same files the runtime is about to execute, so a package's own
+JSDoc is what it shows and cannot drift from what runs.
+
+Only entries gpui-shell wrote are ever replaced or removed — a symlink into its
+dependency cache, or a directory carrying its marker file — so an installed
+package of the same name is left alone, and a link whose dependency the manifest
+no longer declares goes away. Where the platform refuses a symlink, such as an
+unprivileged Windows process, a small package that re-exports the checkout is
+written instead: a bare import types the same way, and a package-subpath import
+stays unresolved.
+
+The directory is called `node_modules` because that is the one place every
+editor looks — no package manager is involved and nothing comes from a
+registry. It also buys quiet: TypeScript treats what it resolves there as an
+external library, so a dependency's own implicit-`any` diagnostics stay out of
+your build. Ignore it, the way `gpui-kit.d.ts` is ignored.
 
 The style methods, their argument types and the colour-token union are generated
 from the tables the runtime dispatches through, so a name that type-checks is a
@@ -451,7 +667,7 @@ the shape to copy.
 
 ### Keeping it current
 
-`gpui.d.ts` is an **output**, not a source, and a stale one is worse than none:
+`gpui-kit.d.ts` is an **output**, not a source, and a stale one is worse than none:
 it completes methods that no longer exist and refuses ones that do, and nothing
 about editing against it feels wrong until the script runs. So it is not
 something to write down and remember — it is rewritten by whatever is about to
@@ -466,10 +682,12 @@ Nothing is written when the file already matches, so an editor watching the
 directory is not woken on every launch and a read-only checkout is not an error.
 A directory that refuses the write is logged, never fatal.
 
-Do not commit it. This repository ignores `gpui.d.ts` everywhere, including
+Do not commit it. This repository ignores `gpui-kit.d.ts` everywhere, including
 beside its own example and story scripts — a committed copy could only ever be
-the stale one. What *is* committed is the hand-written part: a `jsconfig.json`
-that turns checking on.
+the stale one. What *is* committed is the part that has no machine in it: a
+`jsconfig.json` that turns checking on. An application that has none is given
+one on its first launch, in the shape `examples/js_todolist/jsconfig.json`
+uses; from then on it belongs to whoever edits it and is never rewritten.
 
 The header names the gpui-shell version that generated it. Application/runtime
 compatibility is declared separately by `shell-version` in `gpui-shell.json`
@@ -499,6 +717,19 @@ let reading = runtime.read_metrics();
 gpui_shell::clear_exported_modules();
 ```
 
+A host with native components of its own registers them beside the
+`gpui-component` catalog. A runtime takes one frozen catalog, so the host
+takes the catalog before it is frozen, adds to it, and freezes it:
+
+```rust,ignore
+let mut registry = gpui_shell::components::registry()?;
+registry.register(my_component_descriptor())?;
+gpui_shell::host::main_with_components(registry.freeze()?);
+```
+
+Scripts import those components from `"gpui-component"` with the rest of the
+catalog, so their export names must not collide with the catalog's.
+
 ## How It Works
 
 GPUI elements are values that are consumed when used: `RenderOnce::render`
@@ -520,7 +751,7 @@ long that render's output lives.
 - [GPUI Shell design document](../../docs/gpui-shell.md)
 - [`gpui-base`](../base/README.md), the foundation this runtime binds
 - [Architecture](../../docs/ARCHITECTURE.md) and [Styling and Motion](../../docs/STYLING-AND-MOTION.md)
-- [GPUI](https://gpui.rs)
+- GPUI
 
 ## License
 

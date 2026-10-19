@@ -2,18 +2,19 @@
 title: Capabilities
 description: The default-deny model, the fs / storage / clipboard / process surface, where storage lives, and what the sandbox withholds.
 order: 8
+maturity: [preview]
 ---
 
 # Capabilities
 
 A script gets **nothing** by default. No file access, no clipboard, no process execution, no network. `Capabilities::default()` is the empty set, and an assertion holds it there.
 
-The one exception is storage, and only at the manifest layer: an application that does not mention `storage` gets its own `localStorage`, the way a browser hands one to every origin without being asked. That is a convention about what an author has to *write*, not a hole in the model — the Rust `Capabilities` still deny it until a host says otherwise, and a manifest may still say `"storage": false`. See [Storage](#storage).
+The one exception is storage, and only at the manifest layer: an application that does not mention `storage` gets its own `localStorage`, the way a browser hands one to every origin without being asked. That is a convention about what an author has to _write_, not a hole in the model — the Rust `Capabilities` still deny it until a host says otherwise, and a manifest may still say `"storage": false`. See [Storage](#storage).
 
-The host grants what it grants, because only the host knows how far it trusts the code it is about to run. What it hands *out* — its own Rust, exposed on purpose — is [HostModule](./host-module.md). A view freezes its capabilities when it is loaded; changing the default affects applications loaded afterward, never code that is already running under an approved grant.
+The host grants what it grants, because only the host knows how far it trusts the code it is about to run. What it hands _out_ — its own Rust, exposed on purpose — is [HostModule](./host-module.md). A View freezes its capabilities when it is loaded; changing the default affects applications loaded afterward, never code that is already running under an approved grant.
 
 ```rust
-gpui_shell::set_capabilities(
+gpui_kit::shell::set_capabilities(
     Capabilities::new()
         .read_roots([application_root.clone()])
         .write_roots([data_directory.clone()])
@@ -36,7 +37,9 @@ Running a directory from the command line is an explicit act of trust — the sa
 | Exit request      | Granted                                                  |
 | Network           | **Not** granted                                          |
 
-An application can therefore read its own sources and assets and use its own storage, and nothing else. It is deliberately narrower than "everything", because an installed plugin will one day run through the same code path with a manifest deciding instead — and a grant that is generous for a local run would be the wrong default to inherit.
+Without a manifest, an application can therefore read its own sources and assets and use its own storage, and nothing else. It is deliberately narrower than "everything", because an installed plugin will one day run through the same code path with a manifest deciding instead — and a grant that is generous for a local run would be the wrong default to inherit.
+
+With a manifest, everything it grants applies as well — the two directories above are **added** to its `fs` roots, never put in their place — and so does its `process.exit`, which a local run grants regardless.
 
 ## Refusals name the fix
 
@@ -65,20 +68,30 @@ process.exit() is not granted; set capabilities.process.exit to true in the mani
 
 ## The manifest
 
-A directory is recognized by **`gpui-shell.json`**. The manifest is inert data — discovery reads identity, optional version metadata, and requested permissions without executing the entry module. It recognizes `id`, `name`, `version`, `shell-version`, `entry`, and `capabilities`; only `id`, `name`, and `entry` are required:
+A directory is recognized by **`gpui-shell.json`**. The manifest is inert data — discovery reads identity, optional version metadata, Git dependencies, and requested permissions without executing the entry module. It recognizes `id`, `name`, `version`, `shell-version`, `entry`, `dependencies`, and `capabilities`; only `id`, `name`, and `entry` are required:
 
 ```json
 {
   "id": "com.example.quotes",
   "name": "Quotes",
   "version": "1.0.0",
-  "shell-version": "0.1.0",
+  "shell-version": "{{gpui_kit_version}}",
   "entry": "main.js",
+  "dependencies": {
+    "omarchy-ui": "huacnlee/omarchy-ui"
+  },
   "capabilities": {
     "fs": { "read": ["${pluginDir}"], "write": ["${dataDir}"] },
     "network": {
       "hosts": ["stream.example.com"],
-      "http": [{ "scheme": "https", "host": "api.example.com", "methods": ["GET"], "path_prefixes": ["/v1/"] }]
+      "http": [
+        {
+          "scheme": "https",
+          "host": "api.example.com",
+          "methods": ["GET"],
+          "path_prefixes": ["/v1/"]
+        }
+      ]
     },
     "storage": true,
     "clipboard": { "read": false, "write": true },
@@ -87,9 +100,29 @@ A directory is recognized by **`gpui-shell.json`**. The manifest is inert data �
 }
 ```
 
-Every grant in that block defaults to *denied* when omitted, except `storage`, which defaults to granted — write `"storage": false` to refuse it.
+`dependencies` maps a bare module name to a JavaScript package fetched from
+Git before the entry module runs — `import { Title } from "omarchy-ui"`. The
+string form takes strict GitHub shorthand or a full Git URL with an optional
+`#ref`; the object form with an explicit `branch` or `tag` remains supported.
+Every load also links the package where an editor finds it, so the import
+carries the package's own types and documentation. See
+[Dependencies](./dependencies.md) for version selection, the package entry,
+the cache, and what an editor sees.
 
-Unknown fields, invalid reverse-DNS ids, invalid explicitly declared SemVer values, incompatible `shell-version` values, escaping entries, and unknown `${...}` placeholders invalidate the manifest before code runs. Omitted `version` is reported as `unknown`. Omitted `shell-version` accepts the current runtime; when present, it names the oldest compatible gpui-shell release the application requires. Compatibility follows SemVer: `0.x` applications stay on the same minor line; stable releases stay on the same major line. The standalone CLI refuses an invalid manifest instead of executing its entry with silently different assumptions.
+Every grant in that block defaults to _denied_ when omitted, except `storage`, which defaults to granted — write `"storage": false` to refuse it.
+
+An `fs` root is a path, or a path starting with one of three placeholders: `${pluginDir}` (the application's directory), `${dataDir}` (its storage directory) and `${homeDir}` (the user's home directory). A relative path is anchored to the application's directory; an absolute one is taken as written. `${homeDir}` is how an application that manages the user's own files asks for them without hard-coding a user name:
+
+```json
+"fs": {
+  "read": ["${homeDir}/.claude/skills"],
+  "write": ["${homeDir}/.claude/skills"]
+}
+```
+
+`${homeDir}` has the same value as the `HOME` environment variable (`USERPROFILE` on Windows), but the manifest reads no environment variables and does not expand `~`. A root written as `$HOME/…`, `${HOME}/…` or `~/…` is refused when the manifest is read, with the `${homeDir}` spelling to use instead, rather than quietly becoming a directory inside the application. When the home directory is unknown, a root under `${homeDir}` is left out of the grant. A script reads the same path with `os.homedir()`, which needs no grant.
+
+Unknown fields, invalid reverse-DNS ids, invalid explicitly declared SemVer values, incompatible `shell-version` values, escaping entries, and unknown `${...}` placeholders invalidate the manifest before code runs. Omitted `version` is reported as `unknown`. Omitted `shell-version` accepts the current runtime; when present, it names the oldest compatible gpui-shell release the application requires. Any runtime at or above that version is accepted. The standalone CLI refuses an invalid manifest instead of executing its entry with silently different assumptions.
 
 Each scoped `network.http` rule binds the request scheme and effective port as well as its host, method and path. `scheme` defaults to `https`; `port` defaults to that scheme's standard port and only needs to be written for a non-default endpoint.
 
@@ -101,22 +134,28 @@ import * as fs from "fs/promises";
 
 Every call returns a promise. `await` them, or chain `.then` — and see the note below about `render`.
 
-| Call                            | Resolves to                          |
-| ------------------------------- | ------------------------------------ |
-| `fs.readFile(path)`             | `Uint8Array`                         |
-| `fs.readFile(path, "utf8")`     | UTF-8 text                           |
-| `fs.writeFile(path, contents)`  | —                                    |
-| `fs.readdir(path)`              | Names sorted by name                 |
+| Call                                        | Resolves to                     |
+| ------------------------------------------- | ------------------------------- |
+| `fs.readFile(path)`                         | `Uint8Array`                    |
+| `fs.readFile(path, "utf8")`                 | UTF-8 text                      |
+| `fs.writeFile(path, contents)`              | —                               |
+| `fs.readdir(path)`                          | Names sorted by name            |
 | `fs.readdir(path, { withFileTypes: true })` | `Dirent[]` with `isDirectory()` |
-| `fs.exists(path)`               | `true` / `false`                     |
-| `fs.unlink(path)`               | —                                    |
-| `fs.rmdir(path)`                | —                                    |
-| `fs.mkdir(path, options?)`      | —                                    |
+| `fs.exists(path)`                           | `true` / `false`                |
+| `fs.unlink(path)`                           | —                               |
+| `fs.rmdir(path)`                            | —                               |
+| `fs.mkdir(path, options?)`                  | —                               |
+| `fs.stat(path)`                             | `Stats`, following a symlink    |
+| `fs.lstat(path)`                            | `Stats` of the symlink itself   |
+| `fs.rename(from, to)`                       | —                               |
+| `fs.readlink(path)`                         | The symlink's stored target     |
 
 ```js
 const source = await fs.readFile("notes.md", "utf8");
 await fs.writeFile("notes.md", source + "\n");
 ```
+
+`Stats` has `isFile()`, `isDirectory()`, `isSymbolicLink()`, `size`, `mode`, and `mtime`/`atime`/`birthtime` as `Date`s alongside their `…Ms` numbers; a time the filesystem does not record reads as the epoch. `stat`, `lstat` and `readlink` need read access. `rename` needs write access to both paths, so it cannot carry a file out of a root the application may only read.
 
 A relative path resolves against a granted root; an absolute one must already be inside one. Every path in the surface goes through **one resolver**, so there is no second place for a traversal bug to hide. It normalizes the path — `../../etc/passwd` is rejected before it reaches the filesystem — and then settles containment against the filesystem rather than against the string, because a grant is a promise about a _directory_: `data/escape/passwd` is lexically inside the root and reads `/etc/passwd` if `escape` is a symlink. The deepest part of the path that exists is resolved, links and all, and has to still be under the root; a symlink that resolves to nothing is refused rather than guessed at.
 
@@ -143,7 +182,7 @@ A **denial still throws at the call site** rather than rejecting. The capability
 `writeFile` accepts at most 8 MiB per call. `readdir` stops at 10,000 entries or 1 MiB of UTF-8 name bytes, whichever comes first, so an adversarial directory cannot turn one promise into unbounded allocation.
 
 ::: tip Still do not read a file from `render`
-`render` describes the interface; it cannot await. Read in `init` or an event handler, keep the result on the view, and `cx.notify()` when it arrives.
+`render` describes the interface; it cannot await. Read in `init` or an event handler, keep the result on the View, and `cx.notify()` when it arrives.
 :::
 
 ## Storage
@@ -159,22 +198,25 @@ localStorage.key(0);
 localStorage.clear();
 ```
 
-| Member              | Description                                     |
-| ------------------- | ----------------------------------------------- |
-| `length`            | How many keys are stored                        |
-| `key(index)`        | The key at that position, or `null`             |
-| `getItem(key)`      | The value, or `null` when the key is unset      |
-| `setItem(key, val)` | Stores it, converting the value to a string     |
-| `removeItem(key)`   | Forgets one key                                 |
-| `clear()`           | Forgets all of them                             |
-| `flush()`           | Resolves once the writes have reached the disk  |
+| Member              | Description                                    |
+| ------------------- | ---------------------------------------------- |
+| `length`            | How many keys are stored                       |
+| `key(index)`        | The key at that position, or `null`            |
+| `getItem(key)`      | The value, or `null` when the key is unset     |
+| `setItem(key, val)` | Stores it, converting the value to a string    |
+| `removeItem(key)`   | Forgets one key                                |
+| `clear()`           | Forgets all of them                            |
+| `flush()`           | Resolves once the writes have reached the disk |
 
 **The two differ only in how long they last.** `localStorage` is a file the host placed, and it survives a restart. `sessionStorage` is memory that goes with the process. That is also why only one of them is a capability: nothing `sessionStorage` holds ever leaves the process, so there is nothing to grant, and it works on a host that granted nothing.
 
 **Values are strings**, exactly as on the web — `setItem` converts whatever it is handed. Anything with structure goes through `JSON.stringify` on the way in and `JSON.parse` on the way out, which is the same code you would write in a browser:
 
 ```js
-localStorage.setItem("window", JSON.stringify({ title: "Notes", size: [640, 480] }));
+localStorage.setItem(
+  "window",
+  JSON.stringify({ title: "Notes", size: [640, 480] }),
+);
 const window = JSON.parse(localStorage.getItem("window") ?? "{}");
 ```
 
@@ -193,21 +235,21 @@ Storage is per application, and the host chooses the location — an application
 **The host names the application, and its data follows that name:**
 
 ```rust
-let data = gpui_shell::set_bundle_id("com.example.notes")?;
-gpui_shell::set_capabilities(Capabilities::new().write_roots([data]));
+let data = gpui_kit::shell::set_bundle_id("com.example.notes")?;
+gpui_kit::shell::set_capabilities(Capabilities::new().write_roots([data]));
 ```
 
-| Platform             | Location                                                                       |
-| -------------------- | ------------------------------------------------------------------------------ |
+| Platform             | Location                                                                         |
+| -------------------- | -------------------------------------------------------------------------------- |
 | Linux and other Unix | `$XDG_DATA_HOME/gpui-shell/apps/<id>/store.json`, defaulting to `~/.local/share` |
 | macOS                | `~/Library/Application Support/gpui-shell/apps/<id>/store.json`                  |
-| Windows              | `%APPDATA%\gpui-shell\apps\<id>\store.json`                                     |
+| Windows              | `%APPDATA%\gpui-shell\apps\<id>\store.json`                                      |
 
 The id is the identity, so the data survives the directory being renamed, moved, or replaced by an upgrade — which is what a user means by "my settings". Keying on the path instead means an upgrade silently starts them over.
 
 **The runtime does not go looking for the id in a file.** Only the layer that installed the application knows what it is called; a runtime that read it out of a manifest of its own choosing would be claiming authority over something it does not own.
 
-A host that was merely *pointed at* a directory — this command line, a dev server — has no such name, and there the path really is the identity. `gpui_shell::bundle_id_for_path(root)` builds one from the directory's name and a digest of its full path, so the same directory always reaches the same data and two checkouts of one source stay apart. That is right while you are editing something and wrong once it is installed, which is exactly the difference declaring a real id makes.
+The `gpui-shell` command uses the manifest `id`, so `run -d`, an installed copy and a packaged one all reach the same data. A host that was merely _pointed at_ a directory with no manifest has no such name, and there the path really is the identity. `gpui_kit::shell::bundle_id_for_path(root)` builds one from the directory's name and a digest of its full path, so the same directory always reaches the same data and two checkouts of one source stay apart. That is right while you are editing something and wrong once it is installed, which is exactly the difference declaring a real id makes.
 
 The id may hold `a-z`, `0-9`, `.`, `-` and `_`, and no `..`. That is not tidiness: it is joined onto the user's data directory, so an unchecked one reaches the rest of it. Data lives there rather than inside the application because an application directory may be read-only, is often a git checkout, and is not where a user expects their data to be.
 
@@ -268,7 +310,7 @@ console.warn("could not save");
 
 Extra arguments are appended space-separated, the way `console.log` behaves. Structured values print as JSON, because that is what an author reading a log wants to see.
 
-Output goes through `tracing` with the target `gpui_shell::script`, so script output is separable from host output in a log filter. **A host with no `tracing` subscriber installed discards all of it** — along with the runtime's own reports of throwing handlers, unhandled rejections and illegal-phase calls. The `gpui-shell` binary installs a stderr sink at `INFO`, or `DEBUG` under `--dev`.
+Output goes through `tracing` with the target `gpui_kit::shell::script`, so script output is separable from host output in a log filter. **A host with no `tracing` subscriber installed discards all of it** — along with the runtime's own reports of throwing handlers, unhandled rejections and illegal-phase calls. The `gpui-shell` binary installs a stderr sink at `INFO`, or `DEBUG` under the `dev` command.
 
 ## `process`
 
@@ -285,6 +327,29 @@ Output is **captured, not inherited**: a script that runs a command almost alway
 
 Execution is bounded: 30 seconds, 8 MiB of stdout and 8 MiB of stderr. Reaching a bound kills and reaps the child and rejects the promise. Cancelling owned work or tearing down its runtime also terminates the child. The child starts with a cleared environment rather than inheriting host secrets; the shell does not expose an option to add environment variables.
 
+`process.run(command, args, { cwd, timeoutMs })` takes an optional third argument: a working directory, which must be inside a `capabilities.fs.read` grant, and a deadline other than 30 seconds.
+
+### Streaming: `process.spawn`
+
+```js
+const child = process.spawn("codex", ["exec", "--json", task], { cwd, lines: true });
+child
+  .on("stdout", (line, cx) => { this.events.push(JSON.parse(line)); cx.notify(); })
+  .on("stderr", (line) => console.warn(line))
+  .on("exit", ({ code, signal, error }, cx) => { this.done = true; cx.notify(); });
+```
+
+`process.run` waits for the end. A command that runs for minutes, talks over stdin, or is read as it works — an AI command line streaming JSON lines, a long-lived server speaking a protocol on stdin and stdout — needs its output as it arrives. `spawn` returns a `ChildProcess` at once:
+
+- `on("stdout" | "stderr", (text, cx) => …)` delivers output as it is read, or a line at a time with `lines: true`: without the line ending, joined across reads, and the last line delivered even with no newline after it. Output is decoded as UTF-8 whole, even when a character spans two reads. There is no limit on total output, but a single line over 8 MiB kills the process, because a line is held until its newline arrives.
+- `on("exit", ({ code, signal, error }, cx) => …)` fires **once, after the last output**. `error` is set when the runtime stopped the process — a `timeoutMs` deadline, or a line too long — and absent for a process that ended or was `kill()`ed.
+- `write(text)` and `end()` feed stdin when the child was started with `stdin: "pipe"`.
+- `kill()` kills the whole process group, a Job Object on Windows, so a command's own children go with it.
+
+Handlers run on the UI thread with an async `cx`, as a `cx.spawn` task's do, so they can `cx.notify()` and keep the context across an `await`. There is **no deadline** unless `timeoutMs` asks for one. A child belongs to the view that spawned it: releasing the view, reloading the application under `dev --watch`, or closing the window kills it and everything it started, so nothing is left behind as an orphan.
+
+`spawn` takes the same grant as `run`, resolves the command on the host PATH the same way, and starts it with the same empty environment.
+
 It is gated on an execute grant, which is one of three: denied (the default), an allowlist of command names, or unrestricted. A denied command **throws at the call** rather than rejecting, like a denied `fs` path — a rejected promise nobody awaited is a denial nobody sees.
 
 `process.exit` is **a request, never `exit(2)`** inside the runtime. It hands the code to a handler the host installed, which decides what to do — close the plugin's panel, close the window, end the process. One plugin must not be able to take the host process down, and the host may have unsaved state.
@@ -294,6 +359,27 @@ The handler is not optional: a host that grants the capability without installin
 The name is a deliberate collision. `process` is what a JavaScript author — or a model generating JavaScript — reaches for, so the runtime puts its own capability-gated surface there rather than leaving the name free to look like Node's and behave differently.
 
 `process.exit` has its own `capabilities.process.exit` grant. Filesystem access never implies permission to close a panel, window, or process.
+
+### Where things are
+
+```js
+import os from "os";
+
+process.dataDir; // this application's storage directory, the one `${dataDir}` names
+os.homedir(); // the user's home directory
+import.meta.url; // "file:///…/main.js", the running module
+process.env.EDITOR; // a default; other variables only when the manifest lists them
+```
+
+None of the paths needs a grant: a path says where something is, and reading or writing there is still the `fs` grant's decision. The environment is different, because a variable's _value_ can be a token handed to the host rather than to every script it runs. `process.env` therefore holds a fixed set of variables that describe the user's machine, session and preferences — `HOME`, `USER`, `HOSTNAME`, `LANG`, `TZ`, `PATH`, `EDITOR`, `DISPLAY`, the proxy settings, the XDG directories and their Windows counterparts — but never tokens, keys or passwords, plus the ones `capabilities.process.env` names, and only those that are set:
+
+```json
+"process": { "env": ["MY_APP_MODE"] }
+```
+
+Names match regardless of case, so listing `HTTP_PROXY` also shows `http_proxy`, under the spelling the environment uses. The default set is maintained in [`default-env`](https://github.com/longbridge/gpui-kit/blob/main/crates/shell/src/default-env).
+
+It is always an object, so `process.env.X ?? fallback` works without a grant.
 
 ## The sandbox
 
@@ -311,8 +397,8 @@ Beyond the capability grants, the runtime trims the language itself. All of it a
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Heap                                                          | 256 MiB — a leak becomes a catchable JavaScript exception, not an OOM kill |
 | Interpreter stack                                             | 1 MiB — deep recursion becomes a `RangeError`, not a native stack overflow |
-| Loaded JavaScript module                                      | 8 MiB per source file                                                       |
-| Outstanding host tasks                                        | 1,024 per runtime                                                           |
+| Loaded JavaScript module                                      | 8 MiB per source file                                                      |
+| Outstanding host tasks                                        | 1,024 per runtime                                                          |
 | Time in one call: render and layout                           | 50 ms                                                                      |
 | Time in one call: event and task                              | 500 ms                                                                     |
 | Time in one call: outside any call, such as module evaluation | 5 s                                                                        |
@@ -322,20 +408,20 @@ The clock restarts on every host call, which is what lets the render path have a
 There is no quickjs-libc `std`: quickjs-libc is not compiled into the build. The runtime does provide the small audited `os` module listed below.
 
 ::: tip Development mode
-`--dev` enables source watching and calls `gpui_shell::set_development_mode(true)` before constructing the runtime. That restores dynamic-code constructors and leaves built-in prototypes writable.
+`--dev`, with `run` or `dev`, calls `gpui_kit::shell::set_development_mode(true)` before constructing the runtime. That restores dynamic-code constructors and leaves built-in prototypes writable.
 
 Development mode never relaxes capability gating. It makes the language easier to poke at; it does not hand out access nobody declared, because a grant the author never wrote down is a grant that will be missing in production.
 :::
 
 ## Network and safe standard APIs
 
-Global `fetch(url, options?)` is promise-based and returns `{ status, ok, url, , json() }`. Its grant is narrower than raw networking: every request and redirect must match a declared HTTP host, method, and exact path or path prefix; HTTPS never downgrades to HTTP, and authorization or caller-supplied headers never cross origins.
+Global `fetch(url, options?)` is promise-based and returns `{ status, ok, url, text(), json(), arrayBuffer(), bytes() }`; the body stays bytes until a reader asks for text, so a binary download survives `arrayBuffer()` unchanged. Requests send `User-Agent: gpui-shell/<version>` unless the script sets its own header, since some APIs refuse a request without one. Its grant is narrower than raw networking: every request and redirect must match a declared HTTP host, method, and exact path or path prefix; HTTPS never downgrades to HTTP, and authorization or caller-supplied headers never cross origins.
 
 `net.connect(host, port)` and the named `WebSocket.connect(url, { headers? })` export from `websocket` use `capabilities.network.hosts`. `WebSocket` is not installed as a browser global and is not a constructor. Raw TCP `read()` returns a `Uint8Array`, or `null` at EOF, so transport chunks never undergo lossy text decoding. WebSockets support text and `Uint8Array` messages and serialize writes through one actor. They do not follow redirects. Connect, handshake, and write operations have a 30-second timeout. A socket permits one outstanding `read()` at a time; a second is rejected immediately instead of competing for the next message. Credential and handshake-control headers are refused. Raw TCP and WebSocket access are intentionally broader than an HTTP request grant.
 
 DNS resolution is a bounded process-wide service: all applications share two resolver workers and a 64-request queue. Queueing observes each connection's existing deadline, so saturation fails as a timeout instead of growing memory or threads without limit. This is resource containment, not per-application quality-of-service; a host that runs mutually untrusted applications in one process does not get DNS fairness between them.
 
-The runtime also provides `buffer`, `path`, `url`, `crypto`, `zlib`, `console`, `process`, and `os`. These are the audited LLRT/host-backed subset declared in generated `gpui.d.ts`; `node:` aliases and arbitrary Node built-ins are not part of the shell contract.
+The runtime also provides `buffer`, `path`, `url`, `crypto`, `zlib`, `console`, `process`, and `os`, plus UTF-8 `TextEncoder` and `TextDecoder` globals. These are the audited LLRT/host-backed subset declared in generated `gpui-kit.d.ts`; `node:` aliases and arbitrary Node built-ins are not part of the shell contract.
 
 ## Not there yet
 

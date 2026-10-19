@@ -8,7 +8,10 @@ use gpui::{
 };
 use smallvec::SmallVec;
 
-use crate::{RoleOverride, Selectable, StateStyle, StyledExt as _};
+use crate::{
+    RoleOverride, Selectable, StateStyle, StyledExt as _, TestSupportExt as _,
+    a11y_disabled::A11yDisabledExt as _,
+};
 
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
@@ -19,7 +22,7 @@ type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 #[derive(IntoElement)]
 pub struct Button {
     id: ElementId,
-    base: Stateful<Div>,
+    base: crate::ObservedElement<Stateful<Div>>,
     style: StyleRefinement,
     semantic_styles: ButtonStyles,
     selected: bool,
@@ -38,7 +41,7 @@ impl Button {
     pub fn new(id: impl Into<ElementId>) -> Self {
         let id = id.into();
         Self {
-            base: div().id(id.clone()),
+            base: div().id(id.clone()).test_support(),
             id,
             style: StyleRefinement::default(),
             semantic_styles: ButtonStyles::default(),
@@ -254,6 +257,7 @@ impl RenderOnce for Button {
             )
             .children(self.children)
             .refine_style(&style)
+            .a11y_disabled(disabled)
     }
 }
 
@@ -420,7 +424,7 @@ mod tests {
         });
         context.update(|window, cx| window.draw(cx).clear(cx));
 
-        let (root, child) = captured.lock().unwrap().clone();
+        let (root, child) = *captured.lock().unwrap();
         let root = root.expect("button bounds");
         let child = child.expect("child bounds");
         assert_eq!(child.center(), root.center());
@@ -547,10 +551,7 @@ mod tests {
 
         assert_eq!(disabled.role(), Role::Button);
         assert!(!disabled.supports_action(accesskit::Action::Click));
-
-        // GPUI's current StatefulInteractiveElement interface has no
-        // aria-disabled setter even though AccessKit can represent it. This
-        // assertion records that upstream gap instead of claiming support.
-        assert!(!disabled.is_disabled());
+        assert!(!enabled.is_disabled());
+        assert!(disabled.is_disabled());
     }
 }
