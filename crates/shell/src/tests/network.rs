@@ -13,7 +13,7 @@ use tungstenite::Message;
 use crate::{Capabilities, ScriptView, ShellRuntime};
 
 const FETCH_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 
 export default class Probe extends View {
@@ -34,7 +34,7 @@ export default class Probe extends View {
 "#;
 
 const NET_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { connect } from "net";
 
@@ -60,7 +60,7 @@ export default class Probe extends View {
 "#;
 
 const NET_LIMIT_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { connect } from "net";
 
@@ -84,7 +84,7 @@ export default class Probe extends View {
 "#;
 
 const NET_PENDING_READ_CLOSE_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { connect } from "net";
 
@@ -106,7 +106,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -129,7 +129,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_HANDSHAKE_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -151,7 +151,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_HEADERS_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -173,7 +173,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_MESSAGES_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -199,7 +199,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_PENDING_READ_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -225,7 +225,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_IDLE_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -243,7 +243,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_CLOSED_WRITE_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -267,7 +267,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_CONCURRENT_READ_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -293,7 +293,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_STALLED_WRITE_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -319,7 +319,7 @@ export default class Probe extends View {
 "#;
 
 const WEBSOCKET_QUEUE_LIMIT_PROBE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 import { WebSocket } from "websocket";
 
@@ -389,6 +389,95 @@ fn fetch_runs_off_thread_and_obeys_the_active_policy(cx: &mut TestAppContext) {
         "fetch did not settle through the script boundary"
     );
     server.join().expect("HTTP server");
+}
+
+const FETCH_BINARY_PROBE: &str = r#"
+import { div, View } from "gpui-kit";
+import { v_flex } from "gpui-base";
+
+export default class Probe extends View {
+  init(_props, cx) {
+    this.state = "pending";
+    cx.spawn(async (cx) => {
+      try {
+        const response = await fetch("__URL__");
+        const buffer = await response.arrayBuffer();
+        const bytes = await response.bytes();
+        this.state = `${buffer instanceof ArrayBuffer}:${[...new Uint8Array(buffer)].join(",")}|${bytes instanceof Uint8Array}:${bytes.length}`;
+      } catch (error) {
+        this.state = `rejected:${error.message}`;
+      }
+      cx.notify();
+    });
+  }
+  render() { return v_flex().child(this.state); }
+}
+"#;
+
+/// A body is bytes until the script asks for text, so a binary response
+/// survives `arrayBuffer()` unchanged rather than through a lossy UTF-8 pass.
+/// The request names the shell as its user agent, since some APIs refuse a
+/// request without one.
+#[gpui::test]
+fn fetch_returns_binary_bodies_and_sends_a_default_user_agent(cx: &mut TestAppContext) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("HTTP listener");
+    let address = listener.local_addr().expect("listener address");
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("HTTP connection");
+        let mut request = [0; 1024];
+        let count = stream.read(&mut request).expect("HTTP request");
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n\x00\xff\xfe\x41")
+            .expect("HTTP response");
+        String::from_utf8_lossy(&request[..count]).to_ascii_lowercase()
+    });
+
+    let source = FETCH_BINARY_PROBE.replace("__URL__", &format!("http://{address}/binary"));
+    let (_runtime, view, mut context) = probe(cx, &source);
+    context.run_until_parked();
+    draw(&mut context, &view);
+    let rendered = snapshot(&mut context, &view);
+    assert!(rendered.contains("true:0,255,254,65|true:4"), "{rendered}");
+    let request = server.join().expect("HTTP server");
+    assert!(
+        request.contains(&format!(
+            "user-agent: gpui-shell/{}\r\n",
+            env!("CARGO_PKG_VERSION")
+        )),
+        "{request}"
+    );
+}
+
+#[gpui::test]
+fn fetch_lets_the_script_replace_the_user_agent(cx: &mut TestAppContext) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("HTTP listener");
+    let address = listener.local_addr().expect("listener address");
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("HTTP connection");
+        let mut request = [0; 1024];
+        let count = stream.read(&mut request).expect("HTTP request");
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+            .expect("HTTP response");
+        String::from_utf8_lossy(&request[..count]).to_ascii_lowercase()
+    });
+
+    let source = FETCH_PROBE.replace(
+        r#"fetch("__URL__")"#,
+        &format!(
+            r#"fetch("http://{address}/agent", {{ headers: {{ "User-Agent": "quotes-app/2" }} }})"#
+        ),
+    );
+    let (_runtime, view, mut context) = probe(cx, &source);
+    context.run_until_parked();
+    draw(&mut context, &view);
+    assert!(snapshot(&mut context, &view).contains("200|true|ok"));
+    let request = server.join().expect("HTTP server");
+    assert!(
+        request.contains("user-agent: quotes-app/2\r\n"),
+        "{request}"
+    );
+    assert_eq!(request.matches("user-agent:").count(), 1, "{request}");
 }
 
 #[gpui::test]
@@ -691,6 +780,12 @@ fn websocket_reads_and_writes_text_and_binary_messages(cx: &mut TestAppContext) 
     let listener = TcpListener::bind("127.0.0.1:0").expect("WebSocket listener");
     let address = listener.local_addr().expect("listener address");
     let (progress, progress_receiver) = mpsc::channel();
+    // Closing rejects a read that has not completed yet, so the server waits to
+    // be told the client has the messages instead of closing straight after
+    // sending them. Without this the test is a race the client loses whenever
+    // the runner is slow enough, and the symptom — a rejected read — looks like
+    // a product failure rather than a starved thread.
+    let (may_close, close_permission) = mpsc::channel::<()>();
     let server = thread::spawn(move || {
         let (stream, _) = listener.accept().expect("WebSocket connection");
         let mut socket = tungstenite::accept(stream).expect("WebSocket handshake");
@@ -710,6 +805,7 @@ fn websocket_reads_and_writes_text_and_binary_messages(cx: &mut TestAppContext) 
             .send(Message::Binary(vec![4, 5, 6].into()))
             .expect("server binary");
         let _ = progress.send(());
+        let _ = close_permission.recv_timeout(Duration::from_secs(10));
         socket.close(None).expect("server close");
         socket.flush().expect("flush server close");
     });
@@ -732,14 +828,25 @@ fn websocket_reads_and_writes_text_and_binary_messages(cx: &mut TestAppContext) 
             Err(error) => panic!("server messages after second client write: {error}"),
         }
     }
-    let _ = server.join().expect("WebSocket server");
-    for _ in 0..4 {
+    // Poll for the messages rather than pumping a fixed number of times: how
+    // many turns the client needs is the runner's business, not this test's.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let rendered = loop {
+        draw(&mut context, &view);
+        let rendered = snapshot(&mut context, &view);
+        if rendered.contains("server text|true|4,5,6") {
+            break rendered;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for the server messages: {rendered}"
+        );
         thread::sleep(Duration::from_millis(10));
         context.executor().advance_clock(Duration::from_millis(10));
         context.run_until_parked();
-    }
-    draw(&mut context, &view);
-    let rendered = snapshot(&mut context, &view);
+    };
+    let _ = may_close.send(());
+    let _ = server.join().expect("WebSocket server");
     assert!(rendered.contains("server text|true|4,5,6"), "{rendered}");
 }
 
@@ -747,7 +854,6 @@ fn websocket_reads_and_writes_text_and_binary_messages(cx: &mut TestAppContext) 
 fn websocket_pending_read_does_not_block_write_or_close(cx: &mut TestAppContext) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("WebSocket listener");
     let address = listener.local_addr().expect("listener address");
-    let (text_received, text_receiver) = mpsc::channel();
     let server = thread::spawn(move || {
         let (stream, _) = listener.accept().expect("WebSocket connection");
         stream
@@ -764,10 +870,7 @@ fn websocket_pending_read_does_not_block_write_or_close(cx: &mut TestAppContext)
         for _ in 0..3 {
             match socket.read() {
                 Ok(Message::Pong(bytes)) if bytes.as_ref() == [7] => saw_pong = true,
-                Ok(Message::Text(text)) if text == "while read is pending" => {
-                    saw_text = true;
-                    let _ = text_received.send(());
-                }
+                Ok(Message::Text(text)) if text == "while read is pending" => saw_text = true,
                 Ok(message) if message.is_close() => saw_close = true,
                 Ok(_) => {}
                 Err(_) => break,
@@ -779,17 +882,25 @@ fn websocket_pending_read_does_not_block_write_or_close(cx: &mut TestAppContext)
     let source =
         WEBSOCKET_PENDING_READ_PROBE.replace("__URL__", &format!("ws://{address}/pending"));
     let (_runtime, view, mut context) = probe(cx, &source);
-    context.run_until_parked();
-    text_receiver
-        .recv_timeout(Duration::from_millis(500))
-        .expect("client write while read is pending");
-    context.executor().advance_clock(Duration::from_millis(10));
-    context.run_until_parked();
+    // The script only reaches `close()` after its write resolves on this
+    // thread, so keep pumping until the server finishes instead of blocking
+    // on `join` and starving the close past the server's read timeout.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let rendered = loop {
+        draw(&mut context, &view);
+        let rendered = snapshot(&mut context, &view);
+        if server.is_finished() && rendered.contains("write-and-close-finished") {
+            break rendered;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for write and close: {rendered}"
+        );
+        thread::sleep(Duration::from_millis(10));
+        context.executor().advance_clock(Duration::from_millis(10));
+        context.run_until_parked();
+    };
     let server_events = server.join().expect("WebSocket server");
-    context.executor().advance_clock(Duration::from_millis(10));
-    context.run_until_parked();
-    draw(&mut context, &view);
-    let rendered = snapshot(&mut context, &view);
     assert_eq!(server_events, (true, true, true));
     assert!(rendered.contains("write-and-close-finished"), "{rendered}");
 }

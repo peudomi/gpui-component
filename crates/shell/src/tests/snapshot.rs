@@ -21,7 +21,7 @@ use crate::{
 use gpui::{AppContext as _, Entity, IntoElement as _, TestAppContext, VisualTestContext};
 
 const TOGGLE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex, Checkbox } from "gpui-base";
 
 export default class Toggle extends View {
@@ -44,8 +44,19 @@ export default class Toggle extends View {
 
 const ENTRY: &str = "toggle.js";
 
+const FPS_MONITOR: &str = r#"
+import { View, div } from "gpui-kit";
+import { fps_monitor } from "gpui-fps";
+
+export default class Monitor extends View {
+  render() {
+    return div().relative().size_full().child(fps_monitor());
+  }
+}
+"#;
+
 const PATH: &str = r##"
-import { div, View, PathBuilder, Background } from "gpui";
+import { div, View, PathBuilder, Background } from "gpui-kit";
 
 export default class NativePath extends View {
   render() {
@@ -55,7 +66,7 @@ export default class NativePath extends View {
       .line_to("100%", "100%")
       .close()
       .build();
-    return window.paint_path(path, Background.solid("#16a34a"))
+    return window.paint_path(path, Background.solid(`#16a34a`))
       .w(200)
       .h(80);
   }
@@ -91,7 +102,7 @@ fn path_builder_freezes_commands_in_the_render_snapshot(cx: &mut TestAppContext)
 #[gpui::test]
 fn path_dash_rejects_values_that_round_to_zero_pixels(cx: &mut TestAppContext) {
     let source = r##"
-import { div, View, PathBuilder } from "gpui";
+import { div, View, PathBuilder } from "gpui-kit";
 export default class TinyDash extends View {
   render() {
     const path = PathBuilder.stroke(1)
@@ -117,7 +128,7 @@ export default class TinyDash extends View {
 /// A script whose `render` throws every other call, so a failed build can be
 /// observed next to a successful one.
 const FLAKY: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 
 export default class Flaky extends View {
@@ -135,7 +146,7 @@ export default class Flaky extends View {
 "#;
 
 const ASYNC_FAILURE: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex } from "gpui-base";
 
 export default class AsyncFailure extends View {
@@ -153,14 +164,14 @@ export default class AsyncFailure extends View {
 "#;
 
 const ALWAYS_FAILS: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 export default class AlwaysFails extends View {
   render() { throw new Error("first render failed on purpose"); }
 }
 "#;
 
 const INPUT_SUBSCRIPTION: &str = r#"
-import { div, View } from "gpui";
+import { div, View } from "gpui-kit";
 import { v_flex, InputState } from "gpui-base";
 
 export default class InputSubscription extends View {
@@ -202,9 +213,69 @@ fn repeated_gpui_renders_do_not_re_enter_the_script(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn shell_root_reuses_a_clean_views_materialized_subtree(cx: &mut TestAppContext) {
+    let (runtime, mut context, view) = script_view(cx, TOGGLE);
+    context.update(|window, cx| {
+        window.replace_root(cx, |window, cx| {
+            crate::root::ShellRoot::new(view.clone().into(), window, cx)
+        })
+    });
+
+    context.update(|window, cx| window.draw(cx).clear(cx));
+    let first = runtime.metrics().read();
+    let started = std::time::Instant::now();
+    for _ in 0..64 {
+        context.update(|window, cx| window.draw(cx).clear(cx));
+    }
+    let elapsed = started.elapsed();
+
+    let clean = runtime.metrics().read().since(&first);
+    eprintln!(
+        "clean_frames=64 elapsed={elapsed:?} materializations={} materialize_time={:?}",
+        clean.materializations(),
+        clean.materialize_time(),
+    );
+    assert_eq!(clean.script_renders(), 0);
+    assert_eq!(
+        clean.materializations(),
+        0,
+        "64 clean window frames must reuse the subtree produced by the first materialization"
+    );
+
+    view.update(&mut context, |view, cx| view.refresh(cx));
+    context.update(|window, cx| window.draw(cx).clear(cx));
+
+    let refreshed = runtime.metrics().read().since(&first);
+    assert_eq!(refreshed.script_renders(), 1);
+    assert_eq!(
+        refreshed.materializations(),
+        1,
+        "refreshing the script view must invalidate and replace the cached subtree once"
+    );
+}
+
+#[gpui::test]
+fn shell_fps_monitor_never_requests_a_frame(cx: &mut TestAppContext) {
+    let (_runtime, mut context, view) = script_view(cx, FPS_MONITOR);
+    context.update(|window, cx| {
+        window.replace_root(cx, |window, cx| {
+            crate::root::ShellRoot::new(view.clone().into(), window, cx)
+        })
+    });
+
+    context.update(|window, cx| window.draw(cx).clear(cx));
+    let requested = context.update(|window, cx| window.simulate_next_frame(cx));
+
+    assert_eq!(
+        requested, 0,
+        "a HUD that asked for frames would be reporting a cost it was causing:          one dirty view redraws the whole window"
+    );
+}
+
+#[gpui::test]
 fn a_changed_motion_target_requests_native_frames_without_reentering_js(cx: &mut TestAppContext) {
     let source = r#"
-import { View, div } from "gpui";
+import { View, div } from "gpui-kit";
 import { Checkbox } from "gpui-base";
 
 export default class Panel extends View {
@@ -257,7 +328,7 @@ export default class Panel extends View {
 #[gpui::test]
 fn a_changed_spring_target_requests_native_frames_without_reentering_js(cx: &mut TestAppContext) {
     let source = r#"
-import { View, div } from "gpui";
+import { View, div } from "gpui-kit";
 import { Checkbox } from "gpui-base";
 
 export default class Indicator extends View {
@@ -363,6 +434,107 @@ fn notify_from_an_input_subscription_rebuilds_its_own_view(cx: &mut TestAppConte
     assert_eq!(runtime.metrics().read().script_renders(), 2);
 }
 
+/// `gpui-component`'s `InputState` answers `on(...)` exactly as `gpui-base`'s
+/// does — same events, same payload — and both modules construct with
+/// `Type.new(...)`. Before, the component state had no way to hear Enter at
+/// all, and `InputState.new` was not a function.
+#[cfg(feature = "components")]
+#[gpui::test]
+fn a_component_input_state_reports_change_and_submit(cx: &mut TestAppContext) {
+    const SOURCE: &str = r#"
+import { View } from "gpui-kit";
+import { v_flex, InputState as BaseInputState } from "gpui-base";
+import { Input, InputState } from "gpui-component";
+
+export default class Form extends View {
+  init(_props, cx) {
+    this.changes = 0;
+    this.submits = [];
+    this.field = InputState.new("Name");
+    this.field.on("change", (_event, cx) => {
+      this.changes += 1;
+      cx.notify();
+    });
+    this.field.on("submit", (event, cx) => {
+      this.submits.push(event.shift ? "shift" : "plain");
+      cx.notify();
+    });
+    try {
+      this.field.on("press_enter", () => {});
+    } catch (error) {
+      this.refused = String(error.message);
+    }
+    this.base = BaseInputState.new({});
+  }
+
+  render() {
+    let mixed = "accepted";
+    try {
+      Input.new(this.base);
+    } catch (error) {
+      mixed = String(error.message);
+    }
+    return v_flex()
+      .child(`changes: ${this.changes}; submits: ${this.submits.join(",")}`)
+      .child(`refused: ${this.refused}`)
+      .child(`mixed: ${mixed}`)
+      .child(Input.new(this.field));
+  }
+}
+"#;
+
+    cx.update(crate::components::init);
+    let runtime = crate::components::new_isolated_runtime().expect("runtime");
+    cx.update(|cx| runtime.set_global(cx));
+    let view_type = runtime
+        .load_source("component-input.js", SOURCE)
+        .expect("load");
+    let window = cx.add_window(|_, _| Empty);
+    let mut context = VisualTestContext::from_window(*window.deref(), cx);
+    let view = context
+        .update(|window, cx| runtime.instantiate_view(&view_type, window, cx))
+        .expect("instantiate");
+    render_once(&mut context, &view);
+    assert!(
+        snapshot_text(&mut context, &view).contains("refused: unknown input event `press_enter`"),
+        "an unknown event must name the valid ones"
+    );
+    // A base state shares the kind name and could share the handle number,
+    // so it is refused by name rather than resolved in the wrong table.
+    assert!(
+        snapshot_text(&mut context, &view)
+            .contains("mixed: Input(state) expects the InputState from"),
+        "{}",
+        snapshot_text(&mut context, &view)
+    );
+
+    // The isolated runtime's first retained state is the script's only one.
+    let input = runtime
+        .with_component_state::<Entity<gpui_component::input::InputState>, _>(
+            0,
+            "InputState",
+            Clone::clone,
+        )
+        .expect("the script created an input state");
+    context.update(|_, cx| {
+        input.update(cx, |_, cx| {
+            cx.emit(gpui_base::input::InputEvent::Change);
+            cx.emit(gpui_base::input::InputEvent::PressEnter {
+                secondary: false,
+                shift: true,
+            });
+        });
+    });
+    context.run_until_parked();
+    render_once(&mut context, &view);
+
+    assert!(
+        snapshot_text(&mut context, &view).contains("changes: 1; submits: shift"),
+        "{}",
+        snapshot_text(&mut context, &view)
+    );
+}
+
 #[gpui::test]
 fn notifying_three_times_rebuilds_once(cx: &mut TestAppContext) {
     let (runtime, mut context, view) = script_view(cx, TOGGLE);
@@ -437,6 +609,24 @@ fn a_handler_survives_the_frames_that_follow_its_render(cx: &mut TestAppContext)
         snapshot_text(&mut context, &view).contains("count: 1"),
         "the handler from the live snapshot was dropped by later frames"
     );
+}
+
+#[gpui::test]
+fn a_cloned_snapshot_retires_its_callback_generation_only_after_the_last_clone(
+    cx: &mut TestAppContext,
+) {
+    let (runtime, mut context, view) = script_view(cx, TOGGLE);
+    render_once(&mut context, &view);
+    let callback = click_target(&mut context, &view);
+    let retained = context.update(|_, cx| view.read(cx).snapshot().unwrap().clone());
+
+    for _ in 0..2 {
+        view.update(&mut context, |view, cx| view.refresh(cx));
+        render_once(&mut context, &view);
+    }
+    assert!(runtime.live_callback_ids().contains(&callback));
+    drop(retained);
+    assert!(!runtime.live_callback_ids().contains(&callback));
 }
 
 #[gpui::test]
@@ -574,6 +764,25 @@ fn a_palette_change_rebuilds_the_snapshot(cx: &mut TestAppContext) {
         runtime.metrics().read().script_renders(),
         2,
         "a palette change must reach script views"
+    );
+}
+
+#[gpui::test]
+fn an_appearance_only_change_rebuilds_the_snapshot(cx: &mut TestAppContext) {
+    let (runtime, mut context, view) = script_view(cx, TOGGLE);
+
+    render_once(&mut context, &view);
+    assert_eq!(runtime.metrics().read().script_renders(), 1);
+
+    context.update(|_, cx| {
+        gpui_base::Theme::global_mut(cx).appearance = gpui_base::ThemeAppearance::Dark;
+    });
+    render_once(&mut context, &view);
+
+    assert_eq!(
+        runtime.metrics().read().script_renders(),
+        2,
+        "appearance is part of cx.theme(), so changing it must invalidate script views"
     );
 }
 

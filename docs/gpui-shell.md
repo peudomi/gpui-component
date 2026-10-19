@@ -10,7 +10,7 @@
 This document describes the architecture implemented by `crates/shell`. It is a
 source-derived reference, not a proposal. The public exports in
 `crates/shell/src/lib.rs`, the Rust API documentation, and the generated
-`gpui.d.ts` remain authoritative for individual methods.
+`gpui-kit.d.ts` remain authoritative for individual methods.
 
 `gpui-shell` is a scriptable application runtime built on `gpui-base`. The host
 owns rendering, layout, text editing, focus, overlays, and system access; the
@@ -21,7 +21,7 @@ Two documents come before this one: [Architecture](ARCHITECTURE.md) for the
 `gpui-base` seam this runtime sits on, and [Styling and
 Motion](STYLING-AND-MOTION.md) for the token model it exposes to scripts.
 
-The runtime is real and runnable — `cargo run -p gpui-shell -- examples/js_todolist`
+The runtime is real and runnable — `cargo run -p gpui-shell -- run examples/js_todolist`
 opens a working application — but it is not complete. §26 states plainly what
 exists and what does not.
 
@@ -62,7 +62,7 @@ a scripting language while keeping Rust and the GPU on the render path.
 ### 1.1 Standard Runtime installation and removal
 
 The Standard Runtime is built into `gpui-shell`; a script application does not
-install LLRT, Node.js, npm packages, or a second VM. A Rust host enables it by
+install LLRT, Node.js, external package tooling, or a second VM. A Rust host enables it by
 depending on and initializing GPUI Shell:
 
 ```toml
@@ -91,19 +91,20 @@ import { connect } from "net";
 ```
 
 There are deliberately no `node:` aliases and no claim of Node.js
-compatibility. Unknown bare imports remain errors; npm/package resolution is
-not installed.
+compatibility. Unknown bare imports remain errors; only built-in modules and
+manifest-declared Git dependencies are resolved.
 
-| Surface | Implementation and authority |
-| --- | --- |
-| `buffer`, `path`, `url`, `crypto`, `zlib` | LLRT implementation in the existing QuickJS context |
-| `console` | LLRT-compatible surface routed to `gpui_shell::script` tracing |
-| `process` | Shell adapter: filtered metadata plus async bounded `run` and host-mediated `exit` |
-| `os` | Honest read-only subset: platform, architecture, and line ending; no invented home/temp paths |
-| `fs/promises` | Shell adapter over capability directory handles; no callback-style `fs` module or ambient `std::fs` access |
-| global `fetch` | Capability-checked HTTP, including every redirect; 30-second timeout and 8 MiB buffered-body limit |
-| `net` | Capability-checked TCP connect; 30-second I/O timeout and 1 MiB per-call read/write limit |
-| `websocket.WebSocket` | Capability-checked `connect` plus asynchronous text/binary `read`, `write`, and `close`; not a browser global or constructor; 8 MiB message/frame limit |
+| Surface                                   | Implementation and authority                                                                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `buffer`, `path`, `url`, `crypto`, `zlib` | LLRT implementation in the existing QuickJS context                                                                                                     |
+| `console`                                 | LLRT-compatible surface routed to `gpui_shell::script` tracing                                                                                          |
+| `process`                                 | Shell adapter: filtered metadata plus async bounded `run` and host-mediated `exit`                                                                      |
+| `os`                                      | Honest read-only subset: platform, architecture, and line ending; no invented home/temp paths                                                           |
+| `fs/promises`                             | Shell adapter over capability directory handles; no callback-style `fs` module or ambient `std::fs` access                                              |
+| global `fetch`                            | Capability-checked HTTP, including every redirect; 30-second timeout and 8 MiB buffered-body limit                                                      |
+| global `TextEncoder`, `TextDecoder`       | Shell implementation of the WHATWG Encoding classes, UTF-8 only; needs no capability                                                                    |
+| `net`                                     | Capability-checked TCP connect; 30-second I/O timeout and 1 MiB per-call read/write limit                                                               |
+| `websocket.WebSocket`                     | Capability-checked `connect` plus asynchronous text/binary `read`, `write`, and `close`; not a browser global or constructor; 8 MiB message/frame limit |
 
 The old `gpui.fs` and `gpui.process` exports have been removed. Existing scripts
 must migrate to `fs/promises` and `process`; `console` remains global and is
@@ -147,7 +148,7 @@ is the best-covered language in public training data, and its type declarations
 (§14.4) are a format both editors and models already read.
 
 The same coverage is also a liability: a model writing for this runtime will
-reach for `document`, full browser `fetch`, `require("fs")`, npm packages, and
+reach for `document`, full browser `fetch`, `require("fs")`, ecosystem packages, and
 `setTimeout`. Only the documented Standard Runtime subset exists. §19.1 answers
 unsupported callable globals with named stubs and rejects unknown modules,
 rather than silently pretending broad compatibility.
@@ -198,11 +199,13 @@ Seven things are deliberately absent, and will stay absent:
    `dlopen`ed native code inside the process defeats the sandbox outright.
 6. **`gpui-base` is not modified.** Everything lives in `crates/shell`.
 7. **There is no Node.js or browser compatibility layer.** There is no DOM,
-   CommonJS `require`, Node module resolution, npm, or `node:` namespace. The
+   CommonJS `require`, general Node module resolution, or `node:` namespace. The
    Standard Runtime deliberately exposes selected bare modules plus a
    WinterCG-style `fetch`; those individual APIs do not imply browser or Node.js
    compatibility. The shell's narrow `window` and `process` globals expose only
-   GPUI/host capabilities.
+   GPUI/host capabilities. `WebView` (§14.8) does not change this: it embeds a
+   web page as one element, and the script around it still runs in QuickJS
+   with no DOM.
 
 ---
 
@@ -212,7 +215,7 @@ Seven things are deliberately absent, and will stay absent:
 
 ```text
      JS application            main.js · views · styles · business logic
-              │  import ... from "gpui" · "gpui-base" · "gpui-fps"
+              │  import ... from "gpui-kit" · "gpui-base" · "gpui-fps"
               ▼
      crates/shell ── gpui-shell
      ┌──────────────────────────────────────────────┐
@@ -266,7 +269,7 @@ and styling written in JavaScript instead of Rust, and `ui.js` deliberately
 follows the showcase's visual language.
 
 **The layering is visible in the script's import lines.** Each crate that
-provides script API gets a module named after it: `"gpui"` for GPUI's own
+provides script API gets a module named after it: `"gpui-kit"` for GPUI's own
 elements and what this runtime adds, `"gpui-base"` for base's layout helpers,
 components and theme, `"gpui-fps"` for its overlay. A name belongs to exactly one
 of them, which makes the boundary argued for above checkable rather than merely
@@ -290,14 +293,14 @@ product palette. The `gpui-shell` binary separately embeds
 after shell initialization (§13.3).
 
 **There is no `Root`, so the shell provides `ShellRoot`.** `Root` lives in
-`crates/ui` and belongs to `gpui-component`. Base ships the parts — `Dialog` and
+`crates/component` and belongs to `gpui-component`. Base ships the parts — `Dialog` and
 `Sheet` each build their own viewport-sized host, `ToastManager` and
 `ToastStackState` own stacking geometry, `FocusTrapElement` owns focus trapping
 — but nothing in base decides what happens when two of them are open at once.
 `root.rs` is that decision (§16).
 
 **There is no Icon, TitleBar, or Notification component.** `Icon`, `IconName`,
-`TitleBar`, and `window_border` are all in `crates/ui`. Scripts load icons with
+`TitleBar`, and `window_border` are all in `crates/component`. Scripts load icons with
 `svg(path)`, resolved against the application directory by `assets.rs`, and draw
 their own chrome.
 
@@ -307,9 +310,9 @@ described in §15, and it is not done.
 
 ### 4.4 Constraints on existing crates
 
-`crates/base` and `crates/ui` are unchanged; `crates/shell` depends on
+`crates/base` and `crates/component` are unchanged; `crates/shell` depends on
 `gpui-base` (with its `inspector` feature) and `gpui`, and on neither
-`gpui-component` nor `crates/ui`. Consumers who do not add `crates/shell` see no
+`gpui-component` nor `crates/component`. Consumers who do not add `crates/shell` see no
 change to their build output or dependency tree.
 
 `crates/shell` enables `gpui-base/inspector` unconditionally, which forwards to
@@ -335,7 +338,7 @@ correspond one-to-one with the Rust API, so learning one teaches the other. A
 DSL would need its own parser, diagnostics, editor support, and version
 evolution. JSX would need a compile step, and "edit a line, save, see it" is the
 reason this runtime exists. This matches the GPUI builder style in
-`CLAUDE.md`: keep one fluent chain and express conditions with `when`.
+`AGENTS.md`: keep one fluent chain and express conditions with `when`.
 
 **5.4 A context is valid only for the duration of a call.** `&mut App`,
 `&mut Window`, and `&mut Context<T>` are borrows. `CallScope` turns "am I inside
@@ -343,7 +346,7 @@ a legal host call?" into a runtime-checkable fact, so an out-of-scope access
 throws a script exception rather than reading a dead stack frame (§9).
 
 **5.5 Binding tables are data.** The no-argument style surface comes from
-GPUI's reflection tables with no hand-written names, and `gpui.d.ts` is
+GPUI's reflection tables with no hand-written names, and `gpui-kit.d.ts` is
 generated from the same tables the dispatcher uses (§14.4). The failure mode of
 hand-written bindings is not that they are tedious; it is that upstream changes
 a signature and the binding does not follow.
@@ -394,7 +397,7 @@ engine has to justify why it could not (§6.5).
 | `view`            | `ScriptView`: the one bridge into GPUI's render loop, and where a snapshot lives                  | above            |
 | `assets`          | Application-directory asset source for `svg(path)`                                                | above            |
 | `watch`           | Source watching and in-place reload                                                               | above            |
-| `typings`         | `gpui.d.ts` generation                                                                            | above            |
+| `typings`         | `gpui-kit.d.ts` generation                                                                        | above            |
 
 The ratio is the argument. Above the seam are the element model, styling,
 theming, capabilities, and context safety — the actual design. Below it is what
@@ -478,7 +481,7 @@ the same application activity must produce the same number of script renders.
 One import, one module. Components are type tables with a single `.new`:
 
 ```js
-import { View, text } from "gpui";
+import { View, text } from "gpui-kit";
 import { v_flex, Button } from "gpui-base";
 
 export default class Counter extends View {
@@ -503,11 +506,11 @@ export default class Counter extends View {
 ```
 
 The built-in modules are named after the crate that provides the capability:
-`"gpui"` for GPUI's own elements and what the runtime adds, `"gpui-base"` for
+`"gpui-kit"` for GPUI's own elements and what the runtime adds, `"gpui-base"` for
 gpui-base's layout helpers, components and theme, and `"gpui-fps"` for its
 performance overlay. A name belongs to exactly one of them, so an import says
 which layer a script depends on, and a layer added later — `gpui-component` —
-arrives as its own module rather than as more names on `"gpui"`. The Standard
+arrives as its own module rather than as more names on `"gpui-kit"`. The Standard
 Runtime also provides the selected bare modules listed in §1.1; every other
 `import` resolves inside the application directory (§19.1). The entry point is `main.js`, and it must
 `export default` a class extending `View`. The host takes that class, constructs
@@ -517,16 +520,16 @@ Naming follows the Rust side directly. **Where a binding lives in Rust decides
 where it lives in JavaScript** — the rule is provenance, not category, so a
 binding added later lands in one place and there is nothing to argue about:
 
-| Rust                          | JavaScript                              | Example                                                    |
-| ----------------------------- | --------------------------------------- | ---------------------------------------------------------- |
-| Method on `App`               | Method on `cx`                          | `App::open_url` → `cx.open_url(url)`                        |
-| Method on `Window`            | Method on the `window` global           | `Window::paint_path` → `window.paint_path(path, bg)`        |
-| Type plus `::new`             | Capitalized type table with only `.new` | `Button::new(id)` → `Button.new(id)`                        |
-| Free function                 | Lowercase function                      | `div()`, `h_flex()`, `v_flex()`, `s`                  |
-| State entity                  | Capitalized type table                  | `InputState::new(...)` → `InputState.new({...})`            |
-| No GPUI or base original      | Where the web already keeps it          | `localStorage`, `console`                                   |
-| A standard-runtime module     | Lowercase module import                 | `fs/promises`, `process`, `path`                            |
-| View base class               | `class X extends View`                  | `export default class Counter extends View`                 |
+| Rust                      | JavaScript                              | Example                                              |
+| ------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| Method on `App`           | Method on `cx`                          | `App::open_url` → `cx.open_url(url)`                 |
+| Method on `Window`        | Method on the `window` global           | `Window::paint_path` → `window.paint_path(path, bg)` |
+| Type plus `::new`         | Capitalized type table with only `.new` | `Button::new(id)` → `Button.new(id)`                 |
+| Free function             | Lowercase function                      | `div()`, `h_flex()`, `v_flex()`, `s`                 |
+| State entity              | Capitalized type table                  | `InputState::new(...)` → `InputState.new({...})`     |
+| No GPUI or base original  | Where the web already keeps it          | `localStorage`, `console`                            |
+| A standard-runtime module | Lowercase module import                 | `fs/promises`, `process`, `path`                     |
+| View base class           | `class X extends View`                  | `export default class Counter extends View`          |
 
 An earlier version of this table mapped by category — "system capability" and
 "scheduling" both became module members — and that is what let the script
@@ -786,8 +789,9 @@ length; `.rounded("50%")` reports that radius needs an absolute one.
 
 `line_height` is the single exception in the grammar: a bare number is a
 multiplier, not pixels, because `line_height(1.45)` means 1.45× the font size
-everywhere else in the industry and 1.45px is never what anyone meant. A string
-still goes through the ordinary grammar.
+everywhere else in the industry — CSS's unitless `line-height: 1.45`, Rust's
+`line_height(relative(1.45))` — and 1.45px is never what anyone meant. A string
+still goes through the ordinary grammar, so `line_height("18px")` is fixed.
 
 ### 7.2 Descriptions
 
@@ -835,6 +839,14 @@ The event names a script can subscribe to are `change`, `submit`, `focus`, and
 `blur` — named for what they mean rather than for the key that produced them, so
 `submit` covers base's `InputEvent::PressEnter`. An unknown name reports the
 full valid set.
+
+Base emits `PressEnter` for every Enter, including one a textarea has just
+turned into a line break, so a textarea's `submit` arrives after the break is
+in the text. `TextareaState.set_submit_on_enter(true)` passes through to base's
+`set_submit_on_enter`: Enter then inserts nothing and only submits, and
+Shift+Enter still inserts a line break and is still reported, with
+`shift: true`. The shell does not filter that second `submit`, because base
+reports it and a script may want it; the handler checks `event.shift`.
 
 ### 7.4 Cycles across two garbage collectors
 
@@ -908,7 +920,7 @@ that temptation sharp, because object literals are the most natural thing in the
 language and React has made "UI is data" reflexive. What it would buy — fewer
 host calls per description — is worth much less now that a description is not
 rebuilt per frame (§8.4), and what remains is available from virtualization
-instead (§20.4).
+instead (§20.6).
 
 ### 8.3 The description arena
 
@@ -1182,8 +1194,10 @@ longer costs a script render at all.
 
 What is left for `gpui.memo` is _sub_-tree granularity — skipping the part of a
 rebuild whose data has not changed when the rest of the view has. That is a
-smaller win than it used to be, and it is not implemented. §20.4 places it
-against the other levers.
+smaller win than it used to be, and it is not implemented. §20.6 places it
+against the other levers, and §20.7 states its complement: memo reuses a subtree
+whose values did not change, a template cache reuses a structure whose values
+did.
 
 ---
 
@@ -1239,19 +1253,19 @@ no borrow checker, so the line is drawn at run time by `ContextBinding`:
   member is used, and refuses only when none is. It is what `init` receives and
   what `cx.spawn` and `cx.timer` hand their callbacks.
 
-That is the *whole* difference: every member gates on the binding's check and
+That is the _whole_ difference: every member gates on the binding's check and
 then does ordinary ambient work, so the two cannot drift apart. Nor is ambient
 resolution a new mechanism here — it is the majority one. `scope::with_context`
 has two call sites outside `scope.rs`; `with_current` and `with_current_app`
 back entity creation, the overlays, storage, the clipboard, the theme and every
-native module. The overlays were themselves *moved off* `cx` onto the ambient
+native module. The overlays were themselves _moved off_ `cx` onto the ambient
 `window` global for exactly this reason, and `overlay.rs` records the argument.
 
 Nothing is lost by it. `notify` already reads its view from the ambient
 `current_view()`, and every re-homed member was ambient underneath to begin
 with, so an `AsyncContext` used from a later call is not working by luck — it is
 working the way the operation always worked. What the generation refuses is a
-`cx` used in a frame that is merely *different*; what an `AsyncContext` still
+`cx` used in a frame that is merely _different_; what an `AsyncContext` still
 refuses is one used with no frame at all.
 
 The `unsafe` is confined to this one module and its preconditions are written
@@ -1272,12 +1286,12 @@ what to reach.
 
 ### 9.3 What each phase permits
 
-| Phase    | Permits                                                               | Refuses                                            |
-| -------- | --------------------------------------------------------------------- | -------------------------------------------------- |
-| `Render` | Reading state and the theme, building elements, registering callbacks | `notify`, creating entities, opening overlays      |
-| `Event`  | Everything: mutating state, `notify`, `spawn`, overlays               | Blocking                                           |
-| `Task`   | Same as `Event`                                                       | Blocking                                           |
-| `Layout` | Reading and building elements (§8.5)                                  | `notify`, creating or destroying entities          |
+| Phase    | Permits                                                               | Refuses                                       |
+| -------- | --------------------------------------------------------------------- | --------------------------------------------- |
+| `Render` | Reading state and the theme, building elements, registering callbacks | `notify`, creating entities, opening overlays |
+| `Event`  | Everything: mutating state, `notify`, `spawn`, overlays               | Blocking                                      |
+| `Task`   | Same as `Event`                                                       | Blocking                                      |
+| `Layout` | Reading and building elements (§8.5)                                  | `notify`, creating or destroying entities     |
 
 Every refusal is a specific message, not undefined behavior:
 
@@ -1401,7 +1415,9 @@ conditionally instead:
 function saveButton(cx, disabled, selected) {
   return Button.new("save")
     .when(disabled, (el) => el.opacity(0.4))
-    .when(selected, (el) => el.bg(cx.theme().colors.muted).border_color(cx.theme().colors.foreground));
+    .when(selected, (el) =>
+      el.bg(cx.theme().colors.muted).border_color(cx.theme().colors.foreground),
+    );
 }
 ```
 
@@ -1409,15 +1425,122 @@ That is a real gap rather than a simplification, because it means the semantic
 precedence rules in [Styling and Motion](STYLING-AND-MOTION.md) are not
 available to a script; the script re-derives them with `when`.
 
-### 10.5 Actions and key bindings
+### 10.5 Input events
 
-Not implemented. GPUI actions are types generated by `actions!` at compile time,
-and a script cannot produce a Rust type, so the intended shape is a single
-`ShellAction { id: SharedString }` with script ids interned into `&'static str`.
-The only key bindings installed today are `ShellRoot`'s own Tab and Shift-Tab
-(§16).
+`on_key_down`, `on_key_up`, `on_modifiers_changed`,
+`on_mouse_down(button, …)`, `on_mouse_up`, `on_mouse_down_out`,
+`on_scroll_wheel` and `on_pinch` are GPUI's own `InteractiveElement` builders, installed
+together by `materialize::with_input_handlers`.
 
-### 10.6 Entity subscriptions
+```js
+div()
+  .track_focus(this.handle)
+  .on_key_down((event, cx) => {
+    if (event.keystroke === "cmd-s") {
+      this.save();
+      cx.stop_propagation();
+    }
+  });
+```
+
+Modifier-only presses and releases use GPUI's native event rather than a
+synthetic key event:
+
+```js
+div()
+  .track_focus(this.handle)
+  .on_modifiers_changed((event, cx) => {
+    this.primaryModifierDown = event.modifiers.control;
+    this.capslockOn = event.capslock.on;
+    cx.notify();
+  });
+```
+
+The event preserves GPUI's `ModifiersChangedEvent` shape. Its `modifiers`
+object contains `shift`, `control`, `alt`, `platform`, and `function`; its
+`capslock` object contains `on`. Like key events, it travels the focus path.
+
+**Where they are installed.** `div`, `h_flex`, `v_flex`, `Button`, `Link`,
+`Checkbox`, `Switch`, `Radio`, `Toggle`, `Tabs` and `Tab`. Every other
+component builds its own base type and hangs its own listeners on it, so a
+handler written there is recorded in the description and never reaches GPUI —
+reported by `warn_unhonoured_input`, the way `tooltip` reports the same shape
+of gap. Widening the list is one call per component, not a new mechanism.
+
+The two kinds route differently and it shows: a key event travels the focus
+path, a pointer event travels the hitbox. So a component that accepts no
+script focus handle — `Tab` — hears presses and never hears keys, however well
+both are wired. That is a property of the component, not of the wiring.
+
+**One function for both kinds, and that is load-bearing.** An earlier version
+factored out only the keyboard and left the pointer inline in the `div` arm, so
+every component the helper was applied to answered keys and silently ignored
+presses — while the table naming which components honour input claimed all of
+it. Half a family is worse than none, because the table is then wrong rather
+than incomplete.
+
+**The keystroke spelling is normalized.** `keystroke` is the whole chord, but
+not `Keystroke::unparse`: GPUI spells the platform modifier for the platform it
+was built for — `cmd-`, `super-`, `win-` — which is right for a keymap a person
+reads and wrong for a string a program compares. A script is one file running
+on all three, so `event.keystroke === "cmd-s"` has to mean the same thing
+everywhere. `materialize`'s `script_keystroke` spells it `cmd` on every
+platform, which is a spelling `Keystroke::parse` accepts everywhere, so a
+binding and the event it produces agree by construction. `key` and `modifiers`
+carry the same chord taken apart.
+
+`cx.stop_propagation()` and `cx.propagate()` mirror `App`'s own pair, and are
+not specific to the keyboard: GPUI delivers every event to every handler on the
+path, so an element nested inside another that handles the same event fires
+both by default.
+
+### 10.6 Actions and key bindings
+
+GPUI actions are types generated by `actions!` at compile time, and a script
+cannot produce a Rust type, so the whole family collapses into one
+[`crate::action::ShellAction`] carrying the script's own id. `cx.bind_keys`
+installs `KeyBinding`s over it, `key_context(...)` declares where a binding
+applies, `on_action(id, handler)` handles one, and `window.dispatch_action(id)`
+sends one without a keyboard.
+
+```js
+init(_props, cx) {
+  cx.bind_keys([{ keystroke: "cmd-s", action: "save", context: "Editor" }]);
+}
+
+render(_cx) {
+  return div()
+    .key_context("Editor")
+    .track_focus(this.handle)
+    .on_action("save", (event, cx) => this.save(cx));
+}
+```
+
+**One type is not a free simplification, and the place it bites is dispatch.**
+GPUI matches an action listener by `TypeId`, and during the bubble phase it
+stops after the first listener that matches: an action is handled once, by the
+innermost element claiming it. That is exactly right when every action is its
+own type. It is wrong when they all share one — two `on_action` registrations
+on one element would be two listeners with the same `TypeId`, and the first
+would swallow every action including the ones meant for the second.
+
+So `materialize` installs **one** GPUI listener per element however many
+actions the script registered, and does by id what GPUI would have done by
+type: find the handler, or call `cx.propagate()` so an unclaimed action carries
+on outward. `ShellAction::partial_eq` compares ids for the same reason —
+comparing types would make every script action equal to every other, which is
+the question GPUI asks when it looks up the chord currently bound to one.
+
+`Action::name()` returns `&'static str`, so every `ShellAction` answers one
+name for the family. Nothing downstream needs it to distinguish two of them:
+dispatch is by `TypeId`, and the id is compared at the listener. The name is
+for the keymap's JSON form and for anything that shows an action to a person.
+
+What is still missing is a contribution registry (§18.4): bindings are
+installed by a running script rather than declared in a manifest, so they
+arrive when `init` does.
+
+### 10.7 Entity subscriptions
 
 ```js
 const state = InputState.new({ placeholder: "What needs doing?" });
@@ -1438,7 +1561,7 @@ misspelling reports all of them.
 | ---------------- | ------------------------------------------ | ------------------------------------------ | ----------------------------- |
 | View-local       | Fields on the view instance (`this.count`) | Expansion, filters, drafts                 | `cx.notify()`                 |
 | Host entity      | `Entity<T>` behind a handle (`InputState`) | Text, and later trees, tables, dock layout | The entity notifies itself    |
-| Application-wide | `localStorage` (§17.3) or module scope       | Settings, caches                           | Subscribers notify explicitly |
+| Application-wide | `localStorage` (§17.3) or module scope     | Settings, caches                           | Subscribers notify explicitly |
 
 ### 11.2 There is no automatic dependency tracking
 
@@ -1458,7 +1581,7 @@ assumes the opposite: **there are no signals here, no
 ### 11.3 View definition
 
 ```js
-import { View } from "gpui";
+import { View } from "gpui-kit";
 
 export default class Counter extends View {
   init(props = {}) {
@@ -1468,9 +1591,7 @@ export default class Counter extends View {
 
   render(cx) {
     // phase = Render; returns exactly one element
-    return v_flex()
-      .gap(12)
-      .child(`${this.count}`);
+    return v_flex().gap(12).child(`${this.count}`);
   }
 }
 ```
@@ -1623,7 +1744,7 @@ supporting one. All of it is above the seam: `style.rs` is engine-independent an
 
 ### 13.1 No-argument styles: reflected, zero maintenance
 
-`crates/ui/src/inspector.rs` already does something this runtime needs:
+`crates/component/src/inspector.rs` already does something this runtime needs:
 
 ```rust,ignore
 let table: Vec<_> = [
@@ -1681,7 +1802,7 @@ each.
 
 ### 13.2 Styles that take arguments
 
-Fifty-seven methods are bound by hand in `style.rs`, and they are indistinguishable
+Sixty methods are bound by hand in `style.rs`, and they are indistinguishable
 from the reflected ones at the call site:
 
 ```js
@@ -1696,15 +1817,27 @@ function panel(cx) {
 }
 ```
 
-They divide as 9 size, 7 padding, 7 margin, 5 position, 6 flex, 6 paint, 8
-border, and 9 radius. Five families are deliberately unbound, with the reason
-recorded at the head of the array: `shadow` takes a `Vec<BoxShadow>` and belongs
-with the animation and token work rather than as a positional argument list;
-`cursor`, `text_align`, `text_overflow`, and `font_weight` take GPUI enums and
+They divide as 9 size, 7 padding, 7 margin, 5 position, 6 flex, 9 paint, 8
+border, and 9 radius. Two of the paint methods take a structured value rather
+than a primitive. `bg` accepts a `Background` from the script's `Background`
+builder as well as a colour, so a rounded element can be filled with a linear
+gradient; it reuses the `BackgroundSpec` that `window.paint_path` records, and
+both convert through one function. `shadow` takes an array of CSS-like records,
+`{ x, y, blur, spread, color, inset }`, where `blur` keeps CSS semantics and is
+halved into GPUI's gaussian deviation, and the list is reversed so the first
+shadow paints on top as in CSS; `[]` removes the shadows, and the
+`shadow_*` presets stay nullary and reflected. Both cross the bridge as
+`Bridged::Background` and `Bridged::Shadows`, so they replay through the same
+`SpecOp::ParamStyle` path as every other style, including state styles such as
+`.hover(...)` and template slots.
+
+Three families are deliberately unbound, with the reason recorded at the head
+of the array: `cursor`, `text_align`, and `text_overflow` take GPUI enums and
 would each need a name mapping when every variant already has a nullary form
-(`cursor_pointer`, `text_center`, `font_bold`); and `scrollbar_width` is
-not exposed because the shell owns native overflow behavior but does not yet
-offer configurable scrollbar presentation.
+(`cursor_pointer`, `text_center`); `font_weight` is bound only because GPUI
+represents it as a number; and `scrollbar_width` is not exposed because the
+shell owns native overflow behavior but does not yet offer configurable
+scrollbar presentation.
 
 Overflow itself is an element behavior rather than a `StyleRefinement` entry:
 `.overflow_scroll()`, `.overflow_x_scroll()`, and `.overflow_y_scroll()` wrap a
@@ -1744,7 +1877,7 @@ because a wrong suggestion is worse than none:
 unknown element method `items_centre` (did you mean `items_center`?)
 ```
 
-Two further guarantees hold regardless of engine. `gpui.d.ts` plus `// @ts-check`
+Two further guarantees hold regardless of engine. `gpui-kit.d.ts` plus `// @ts-check`
 catches the same class of mistake in the editor, before anything runs (§14.4).
 And nothing is ever silently ignored: any name reaching `__apply` that the
 dispatcher does not recognize throws.
@@ -1788,7 +1921,7 @@ Rules for script:
 - An unknown token is an error listing the valid set, never a transparent
   fallback — that would reproduce the exact failure this module exists to
   prevent.
-- This matches `CLAUDE.md`: the theme API exposes semantic tokens, not a growing
+- This matches `AGENTS.md`: the theme API exposes semantic tokens, not a growing
   set of component-specific fields.
 
 The preferred read is call-scoped and explicit at each use site, for example
@@ -1835,7 +1968,7 @@ target style, then attaches a native policy:
 div()
   .id("sidebar")
   .w(this.expanded ? 320 : 64)
-  .transition("width", { duration: 180, easing: "ease-out" })
+  .transition("width", { duration: 180, easing: "ease-out" });
 ```
 
 `transition` and `spring` support `opacity`, `width`, `height`, `left`, and
@@ -1870,6 +2003,17 @@ Combobox, Tabs, Dialog, Sheet, Popover, Tooltip, Scrollbar, Tree, Table,
 VirtualList, Dock, and the rest of the [module
 families](ARCHITECTURE.md#module-families).
 
+Two things are bound as _state without their element_, and the reason is
+render cost rather than cross-language cost. `Calendar` walks its month grid
+calling a renderer once per cell — up to forty-two crossings into the VM per
+frame, from inside GPUI's layout pass, for cells that carry no behavior at all;
+the exception §8 records for a virtual list is one batched call per frame, not
+forty-two unbatched ones. What a script cannot work out for itself is the grid,
+and `CalendarState::month_days` is public, so the state is bound and the
+element is not. `AlertDialog`'s four parts are the opposite case and the same
+answer: they are `div`s with fixed ids, `window.open_dialog` already exists,
+and binding them would add names without adding behavior.
+
 `input::Editor`'s LSP, folding, diagnostics, and highlighting interfaces are
 not, and will not be. They are built from Rust traits and generics —
 `InputHighlighter`, `CompletionProvider`, `HighlightStyleResolver` — where
@@ -1878,32 +2022,39 @@ part that belongs in Rust (§3). An editor should be exposed through a narrow
 "here is the text, here is the language, here is the read-only flag" interface
 instead.
 
-### 14.3 There is no binding table
+### 14.3 The binding table, for registered components only
 
-The design called for bindings declared as data in `crates/shell/src/bindings/`
-and expanded by a macro. It does not exist. Component methods are matched by name
-in each engine's `apply`, and the behavior name list is a literal array in
-`install_globals`. With ten components that is smaller than the macro would be;
-it will not stay that way, and the argument for a table — one source of truth for
-the runtime registry, the declarations, and the documentation — is unchanged.
+The design called for bindings declared as data and expanded by a macro. For
+the built-in `gpui-base` components it still does not exist: their methods are
+matched by name in each engine's `apply`, and the behavior name list is a
+literal array in `install_globals`.
+
+For registered components it does exist, and it is the descriptor
+(§14.7). One `MethodDescriptor` is the runtime's validator, the generated
+TypeScript, and the documentation — one source of truth read three times,
+which is exactly what the table was for. The built-in surface is the part
+still waiting to move onto it.
 
 The style surface already works the way the whole binding layer should: it is a
 table, it is generated, and nothing about it is written by hand.
 
-### 14.4 `gpui.d.ts`
+### 14.4 `gpui-kit.d.ts`
 
 `typings.rs` generates TypeScript declarations for the script API.
-`gpui-shell types <directory>` writes `gpui.d.ts` next to an application, and the
+`gpui-shell types <directory>` writes `gpui-kit.d.ts` next to an application, and the
 output is deterministic — no timestamps, no reflection order — so regenerating
 after a runtime upgrade produces a reviewable diff.
 
-One file, one ambient module per crate that provides the capability: `"gpui"`,
+One file, one ambient module per crate that provides the capability: `"gpui-kit"`,
 `"gpui-base"`, `"gpui-fps"`. A name belongs to exactly one of them. The
 dependency runs upward only — `"gpui-base"` imports the element and
-component-factory types it is built out of from `"gpui"`, and `"gpui"` refers
+component-factory types it is built out of from `"gpui-kit"`, and `"gpui-kit"` refers
 down only where one shared element prototype forces it: `track_scroll`, `mode`,
 `axis` and `cx.theme()` name their argument types with an inline
-`import("gpui-base").X`.
+`import("gpui-base").X`. The component catalog's block is declared under the
+specifier its registry carries (§14.7) — `"gpui-component"` for the shipped
+catalog — and a directory whose scripts import only that specifier gets the
+file too.
 
 What makes the declarations trustworthy is that they are generated from **the
 tables the runtime dispatches through**, not transcribed from documentation:
@@ -1957,44 +2108,217 @@ The remaining limitation is structural: without the component binding table of
 added to the declarations. A check that every `MODULE_EXPORTS` name appears in
 the output would close that gap.
 
-### 14.6 A `gpui-component` module, later
+### 14.6 A `gpui-component` module
 
-The natural second step is a `gpui-component` binding as a _second registry_
-sharing the same render protocol, call scope, event model, and arena:
+The second step was a `gpui-component` binding as a _second registry_ sharing
+the same render protocol, call scope, event model, and arena. It is built;
+§14.7 describes the registry it is built on.
 
 ```js
-import { text } from "gpui";
+import { text } from "gpui-kit";
 import { v_flex } from "gpui-base"; // base: the script owns presentation
 import { Button } from "gpui-component"; // product visuals, ready-made
 ```
 
-Four points decide it now rather than then. The protocol is one thing and the
-registries are two, which is exactly what separating the render protocol from
-component bindings bought. The crate dependency stays optional, behind a feature
-or in its own crate, so not enabling it keeps `gpui-component` out of the tree.
-The two module names must be distinct from the start, because both export
-`Button` with overlapping method names and different semantics, and in JavaScript
-they can be imported into the same file — the module name is the only thing that
-can distinguish them. And migration is then a change of import rather than a
-rewrite: the functions that build the interface change, the business logic and
-the state do not.
+Four points decided it then, and all four held. The protocol is one thing and
+the registries are two, which is exactly what separating the render protocol
+from component bindings bought. The crate dependency stays out of the runtime
+core: the catalog lives in `gpui_shell::components`, behind the `components`
+feature, so building `gpui-shell` without it keeps `gpui-component` out of the
+tree. The two module names are distinct,
+because both export `Button` with overlapping method names and different
+semantics, and in JavaScript they can be imported into the same file — the
+module name is the only thing that can distinguish them. And migration is a
+change of import rather than a rewrite: the functions that build the interface
+change, the business logic and the state do not.
+
+### 14.7 The component registry
+
+§14.6 described a second registry as the natural next step. It exists.
+`gpui_shell::components` (the default `components` feature) registers the
+`gpui-component` catalog against the registry API the rest of the crate owns,
+and that API names no component: the catalog is written against the public
+surface exactly as an embedding host's own catalog would be, and nothing
+outside `components` refers to it. It used to be a separate crate,
+`gpui-component-shell`; it moved in so that `gpui-shell` is the one package and
+the one command, and Cargo forbids the dependency cycle a feature on a separate
+crate would have needed. `gpui_shell::init` installs the base layer;
+`gpui_shell::components::init` installs the catalog and then the runtime. A
+host that wants the protocol without the catalog builds `gpui-shell` without
+the feature and gets an empty registry, which declares no module at all. A host
+that wants the catalog and components of its own calls
+`gpui_shell::components::registry()`, which returns the catalog before it is
+frozen, registers into it, and freezes it; `components()` is that call followed
+by `freeze`. The registry already carries the catalog's initializer and window
+opener. A host whose components need startup of their own replaces the
+initializer with a function that calls `gpui_component::init` first.
+
+**A registry is built, then frozen.** `ComponentRegistry::new(api_version,
+module_specifier)` opens one; `register` and `register_state` add to it;
+`freeze` consumes it and returns a `FrozenComponentRegistry`, which is cheap to
+clone and shared by every runtime built from it. `freeze` takes `self` so that
+"a frozen catalog cannot be registered into" is a fact about the type rather
+than a flag checked at run time.
+
+The specifier is the adapter's to choose. The runtime holds no opinion about
+which component library it is carrying, so the module name a script imports
+from is data on the registry, not a literal in the engine.
+`DEFAULT_COMPONENT_MODULE` is `"gpui-component"`, which is what the shipped
+adapter picks. A registry may not claim one of the runtime's own module names —
+those resolve first, so the catalog would be unreachable rather than overriding.
+
+**Descriptors are built, not written as literals.** `ComponentDescriptor::new`
+takes the component's name and its materializer; `with_constructors`,
+`with_methods`, and `with_documentation` fill in the rest. The fields are
+private for the reason §7 of the coding guides gives: a descriptor crosses the
+seam between the runtime and an adapter, and a later field must be an added
+`with_` method rather than a break in every adapter that registers anything.
+
+Every method must carry documentation. `register` refuses one that does not,
+rather than filling in a default sentence, because a default would make the
+published `gpui-kit.d.ts` look documented without anyone having described it.
+
+**Arguments are schemas, and the schema is the validator.** An
+`ArgumentDescriptor` pairs a name with an `ArgumentSchema` — string, number,
+boolean, element, an entity of a named kind, a callback with a TypeScript
+signature, an enum of literals, an array, or an optional. The engine validates
+a script's call against that schema before the adapter sees it, and
+`typings.rs` emits the matching TypeScript from the same value. A registered
+method's declared type and its enforced type cannot drift, because they are one
+value read twice.
+
+**Recording and materializing are separate.** A method call from script is
+_recorded_: the descriptor's recorder decodes the validated arguments once, into
+an adapter-owned `ComponentPayload`, which is stored on the node. Materializing
+then downcasts that payload. Nothing matches on a method name per frame; the
+string comparison happens once, when the script calls, not once per render.
+
+**`MaterializeRequest` is the whole of what an adapter is handed.** It carries
+the constructor payload, the recorded methods, the node's style, its children,
+its named slots, and the common behavior the shell resolved (`disabled`,
+`selected`, `on_click`). Each part is _taken_, and a part left untaken is
+reported when the request drops — a slot an adapter never read is an element
+the script wrote and nobody rendered, which is worth a line in the log.
+
+Children come in two mutually exclusive lanes. `take_children` returns
+already-materialized `AnyElement`s, which is what an ordinary container wants.
+`take_typed_children` returns opaque tokens instead, for a component whose Rust
+builder needs the concrete child value rather than an element; the adapter asks
+which component each token is and materializes it by hand. Mixing the lanes is
+an adapter bug and is reported as an error, not answered with an empty list.
+
+Slots come in two representations, also exclusive. `take_slot` returns the
+element eagerly. `take_slot_factory` returns a repeatable
+`ComponentElementFactory` for a slot that a deferred GPUI callback — a popover's
+content, a tooltip — has to build later, possibly more than once. A factory
+leases its snapshot, so a deferred build cannot retain an arena that has already
+been cleared, and it is created only when an adapter asks for one by name.
+`take_slot` distinguishes absence from failure: `Ok(None)` means the script
+wrote no such slot, and a slot that exists but cannot be built is an error,
+because collapsing the two would let a script's element disappear with no
+diagnostic at all.
+
+**Retained state.** `register_state` publishes a factory that runs on the
+application thread and returns an adapter-owned value — a native `Entity`, an
+input state, anything that must survive between renders. Script receives an
+opaque frozen object; the registry's generated module maps it back to a handle
+through a `WeakMap` it alone holds. Because retained state travels as an
+ordinary object, the way elements and entities already do, the handle carries a
+proof the module stamps on it. The proof comes from `RandomState`'s OS-seeded
+keys: anything a script can observe — a process id, a clock, a counter — would
+be reconstructible, and a forged handle would reach another application's state.
+Retained values are owned by the application generation that created them and
+are released with it, or earlier when the script calls `release()` on the state
+object. `release()` drops the value and its event subscriptions, returns whether
+the state was still live, and is refused during render and layout like any other
+change to retained state. A method called on it afterwards throws.
+A registered state method may not be named `release`.
+
+A retained state built on the text engine — an `Entity<InputBaseState<M>>`,
+which is what both `gpui-component`'s `InputState` and `TextareaState` are —
+declares `with_input_events::<M>()`, and its script object gains
+`on(event, handler)` with the events, payloads and call scope of `gpui-base`'s
+`InputState.on`: `change`, `submit` (Enter, carrying `secondary` and `shift`),
+`focus` and `blur`. The subscription lives in the state's slot and ends with it.
+The two modules' states share a kind name but not a handle table, so a
+registered component refuses a `gpui-base` state of a kind the registry also
+registers, naming the module whose state it wants, rather than resolving the
+handle in the wrong table.
+
+Every export of the generated module — component and state alike — is callable
+as `Type.new(...)`, the form `gpui-base` uses, as well as by the plain call and
+`new Type(...)` it accepted first. A script importing from both modules writes
+one construction form.
+
+**Effects.** Some native surfaces change state that outlives the render asking
+for it: an application menu bar, a window title. `MaterializeRequest::app_effects`
+returns a keyed capability — `replace(key, revision, …)` installs, returns a
+cleanup, and reinstalls only when the revision changes. Effects belong to the
+application generation that installed them and are torn down when it retires,
+not when the window closes: keys are scoped per generation, so a reload cannot
+replace the previous generation's install, and waiting for the root view would
+leave a reloading application accumulating one install per reload. A revision
+should be a hash of what the effect renders, never `Debug` output, whose format
+is explicitly not stable to key on.
+
+`ComponentWindowEffects` is the shorter-lived counterpart: a transaction within
+one event, where `run_once(key, …)` is idempotent for the length of that event
+and no longer.
+
+**What is registered, and what is not.** `component-inventory.json` lists every
+public `crates/component` module and every Story, and a test fails if that list drifts
+from the public exports. Each entry is either registered — naming its
+descriptor, its exports, and any companion parts — or explicitly deferred with a
+reason. That file is the single answer to "why is X not bound"; a prose list
+beside the source would be a second answer, and the one nothing checks.
+
+### 14.8 WebView
+
+`WebViewState` and `WebView` are registered in the catalog by the default
+`webview` feature, over `gpui-webview`. They follow the retained-state shape
+of `EditorState` and `Editor`: the state owns the native webview, so the
+document, its history and its scroll position survive renders, and the element
+places it in the layout.
+
+**Traffic in both directions is text.** The script reaches the page with
+`evaluate_script(js)`, which returns nothing; the page answers with
+`window.ipc.postMessage(text)`, delivered to `WebView.on_message`.
+`WebView.on_load(url)` reports each document that finishes loading, whoever
+navigated, because that is the first moment a page can be spoken to. A JSON
+protocol between the two is the application's to define.
+
+The native handlers have no `App`, so they push into a bounded channel
+(1,024 events; a message over 1 MiB is dropped) that a window task drains,
+invoking the listeners of the most recent render. The listeners live in the
+state rather than on the element, the way an input's `on_change` does, and a
+render that drops one stops its delivery. The channel's senders live in the
+native webview, so the task ends when the state is released.
+
+**Only `http` and `https` load.** The rule applies to `load_url`, the initial
+URL, and the page's own navigation, through wry's navigation handler; `about:`
+is let through because the engines use `about:blank` while setting up. Without
+it a page or a script could open `file:` URLs and read the disk past every
+`fs` grant. Beyond the scheme, loading is not a capability: browsing a page is
+not treated as network access by the script, which never sees the bytes.
+
+**Platform limits come from `gpui-webview`.** GPUI overlays render above the
+page only with GPUI Fast, so the feature selects GPUI Fast for the whole runtime. On Linux the page needs an X11
+window; on a Wayland window `WebViewState` throws with that reason, and the
+host does not force X11 on applications that never create a page. On Windows
+the native page draws above GPUI content it overlaps.
 
 ---
 
 ## 15. Dock and Panels
 
-`dock.rs` is what lets a panel come from somewhere other than the host binary.
-Base already has the half that is hard to build — a layout that is pure data, a
-`PanelRegistry` that rebuilds a panel from a name in a persisted file, and a
-per-panel `serde_json::Value` that rides along with it — and what it lacked was
-a way to point that machinery at a script.
+`dock.rs` is what lets a panel come from somewhere other than the host binary,
+and `engine/quickjs/dock_api.rs` is the script face of it. Base already had the
+half that is hard to build — a layout that is pure data, a `PanelRegistry` that
+rebuilds a panel from a name in a persisted file, and a per-panel
+`serde_json::Value` that rides along with it — and what it lacked was a way to
+point that machinery at a script.
 
-The module is complete on the Rust side and has **no engine binding above it**:
-nothing in `engine/quickjs/` implements `PanelScript` or `DockChrome`, so a
-script cannot yet register a panel or draw dock chrome. Everything below
-describes what a host can drive today and what the engine layer has to supply.
-
-Two halves, independent of each other.
+Three halves, and they are independent of each other.
 
 **`ScriptPanel`** is a `gpui_base::dock::Panel` whose body is a `ScriptView`.
 It implements behavior only, not the presentation trait one layer up: a script
@@ -2002,63 +2326,138 @@ panel's title, toolbar, and menus are drawn by the skin from the script's own
 elements, which is what "the script owns presentation" means here. Its `dump`
 writes the script's `serialize()` payload into `PanelInfo::panel`, and
 `register_panel` teaches the registry to rebuild it — `PanelScript::build`
-first, then `deserialize` with whatever the last save wrote.
+first, then `deserialize` with whatever the last save wrote. Three more hooks
+carry the rest of a panel's life across the seam: `set_active`, `set_zoomed`,
+and `release`, which is where the engine frees the retained handle its own
+`build` produced.
 
-**`ScriptDockSkin`** is the appearance. It implements all three renderer traits
+**`ScriptDockSkin`** is the appearance. It implements both renderer traits
 and forwards each callback to a `DockChrome`, whose every method has a default
 reproducing base's own no-chrome behavior — so an application that draws no
 chrome implements none of them and still gets a dock that docks, drags, resizes,
 and persists. Base keeps the drag source, drop-target hit testing, keyboard
 actions, and focus; a chrome implementation never sees a drag event, a mouse
-position, or a hit test, only resolved state through `TabGroupContext`,
-`DockContext`, and `TileContext`, and it calls those contexts' own callbacks
-(`select_tab`, `close`, `toggle_zoom`, `resize_to`) rather than reimplementing
-them.
+position, or a hit test, only resolved state through `TabGroupContext` and
+`DockContext`.
 
-Both halves are engine-independent, which is the point: `PanelScript` and
-`DockChrome` are traits the engine implements, and this module deals only in
-`Entity<ScriptView>`, `AnyElement`, and `serde_json::Value`. `tab_group_data`,
-`dock_data`, and `tile_data` convert the state half of each context into plain
-JSON, which is the form the engine can hand to script code. The callbacks are
-deliberately left out of that JSON — they cannot be serialized — so the engine
-keeps the context alongside the value and wires the callbacks onto the elements
-the script returns.
+**The script binding** is `DockArea` (a retained entity), `dock_area(area)` (one
+description of it), and `dock_content()` (where a dock's own content goes inside
+the chrome drawn around it).
 
-Two constraints were known in advance and both hold.
+### 15.1 Why the area is retained rather than described
+
+The layout is what the _user_ changed. A drag, a resize, a closed tab and a
+collapsed dock all happen without a script render, so an area rebuilt from a
+description would put every one of them back the way the last render described
+it. It is therefore an entity in the store, exactly as an input's text is, and
+`dock_area(...)` mounts it.
+
+### 15.2 Commands, not callbacks
+
+A chrome handler runs when its callback or resolved native state changes; the
+resulting spec is cached and replayed in Rust on unchanged frames. A callback
+registered inside one would therefore have no sound event lifetime and could be
+duplicated by later state changes, so it is refused by the same
+`ScopePhase::Layout` check used for virtual-list row descriptions.
+
+So a chrome element carries a `DockCommand` instead: `SelectTab { node, index }`,
+`ClosePanel { node, panel }`, `ToggleDock { placement }` and four more. A command names
+a container and what to ask it, carries no script value, and is resolved against
+`DockContexts` — the table the skin files each context in as base hands it past,
+cleared once per frame by `materialize` before anything is recorded again. The
+contexts are all `Clone` over `Rc` handlers, which is what makes filing them
+possible at all.
+
+That is also why a command is only wired onto the generic stateful `div` path:
+it needs `on_click`, `on_drag` and `on_drop`, which a `Button` — building its own
+interior — does not expose.
+
+### 15.3 The chrome slots
+
+A skin is installed when the area is created and `DockArea` offers no way to
+replace it; the handlers belong to whichever snapshot is currently published.
+`DockChromeSlots` is the join. `materialize` writes the current six callback ids
+as it replays a `dock_area(...)` description — once per frame, before base asks
+the skin for anything — and the engine's `DockChrome` reads them when base does
+ask. Writing them every frame rather than only on change is deliberate: a
+callback id is meaningful only while its snapshot lives, and materialization is
+the one place that always runs against the live one.
+
+`ScriptChrome` caches the `SpecArena` and root produced for each native
+container, together with the callback id and resolved JSON payload. A match
+replays that spec without entering QuickJS; a changed callback or payload
+replaces it. The cache is per retained dock and hard-bounded. It stores no
+`AnyElement`: the current frame still materializes the spec, which is how
+`dock_content()` consumes the native content handed over for that frame.
+
+`dock` is the only hook handed an element. An `AnyElement` cannot cross into
+script, so the engine installs it in `ContentSlot` for the length of the call and
+the script's `dock_content()` takes it. A chrome that never placed it gets its
+content drawn after what it returned, with a warning, rather than losing it.
+
+### 15.4 Every edit is deferred
+
+`add_panel` is handed the token `cx.new(Class)` returned, and the view behind it
+has not been constructed yet; `load` rebuilds panels through the registry, which
+constructs more. Neither can happen while QuickJS holds its runtime lock, which
+is exactly where both calls run. So all three edits — add, remove, load — go
+through `PendingNestedOperation::EditDock` and are applied at the same unlocked
+boundary a `cx.new` is, in the order the calls were made. Removal does not need
+the deferral; it is queued so that ordering holds.
+
+The visible consequence is that `panels()` and `dump()` read the layout as it was
+before the current turn's edits, and `on("layout_changed", …)` is where a script
+reads it afterwards.
+
+### 15.5 Re-entering the VM for `serialize()`
+
+`Panel::dump` is a read with only an `&App`, so `PanelScript::serialize` opens no
+call scope and a script `serialize()` must be a plain value-returning method.
+But `dock.dump()` is itself a call _from_ script, so reaching the panel's
+`serialize()` means entering the VM while its runtime lock is already held —
+which `Context::with` answers with a re-entrant borrow panic.
+
+`ShellRuntime::with_js_nested` is the answer: `with_js` records the context it is
+executing under in a field, and a nested body runs against that borrow instead of
+asking for a second one. A field rather than a thread-local, so two runtimes on
+one thread cannot hand each other a context; installed by a frame on the stack and
+cleared before that frame returns, exactly as `crate::scope`'s pointers are.
+
+### 15.6 Two constraints that were known in advance
 
 `Panel::panel_name` returns `&'static str` while a script's panel name is only
 known when the application loads, so there is no way to satisfy the signature
 without a leak. It is made once per distinct name through a process-wide intern
-table: calling `panel_name("mail", "inbox")` twice returns the same pointer, so
-passing a name back through `ScriptPanel::new` leaks nothing further. The bound
-is applications loaded × panels each, in the hundreds, at tens of bytes apiece.
-Unloading does **not** reclaim a name, deliberately: reclaiming would let a name
-be freed while a persisted layout still refers to it, and outliving the load that
-produced it is the whole purpose of the name.
+table: calling `panel_name("mail", "inbox")` twice returns the same pointer. The
+bound is applications loaded × panels each, in the hundreds, at tens of bytes
+apiece. Unloading does **not** reclaim a name, deliberately: reclaiming would let
+a name be freed while a persisted layout still refers to it, and outliving the
+load that produced it is the whole purpose of the name.
 
 The name is namespaced `shell:<application>/<panel>`. The prefix is `shell:`
 rather than an engine name so that one layout file still restores after the host
-switches engines — what wrote the panel is the shell, not QuickJS. It is applied
-however the panel was built: a `ScriptPanel::new("TabPanel", …)` becomes
-`shell:TabPanel`, so a script panel can never shadow a host one.
+switches engines. The application half comes from `Policy::application()` —
+`set_bundle_id` for a single-application host, the manifest id for a plugin —
+because a policy already answers "under whose authority?", and "filed under whose
+name?" is the same question asked of persistence.
 
-The property that makes all of this worth building is one base already
-guarantees, and `dock.rs` extends it by one step. When a panel's name is not in
-the registry, `DockArea` substitutes a draw-nothing placeholder that answers
-`dump` with the `PanelState` it was handed, so the next save writes the panel —
-name, payload, and position — back out unchanged; a user can uninstall an
-application and reinstall it and its panels return to where they were. The
-extension covers the case base does not: a panel that _is_ registered but whose
-script throws on construction gets a `RetainedPanel` with the same behavior, so
-a broken script costs the user that panel's contents for the session rather than
-its place in the layout or its saved state.
+### 15.7 The property that makes it worth building
 
-One asymmetry is worth knowing before implementing the engine half.
-`PanelScript::serialize` takes `&App`, not `&mut Window`, because `Panel::dump`
-is a read — so there is no call scope to open, and a script `serialize()` must
-be a plain value-returning method that calls nothing back into the host.
-`deserialize` runs after `build`, with a real host call available, and may open
-a scope and touch entities.
+When a panel's name is not in the registry, `DockArea` substitutes a
+draw-nothing placeholder that answers `dump` with the `PanelState` it was handed,
+so the next save writes the panel — name, payload, and position — back out
+unchanged; a user can uninstall an application and reinstall it and its panels
+return to where they were. `dock.rs` extends that by one step: a panel that _is_
+registered but whose script throws on construction gets a `RetainedPanel` with
+the same behavior, so a broken script costs the user that panel's contents for
+the session rather than its place in the layout or its saved state.
+
+Registering a panel class also has to survive the runtime outliving neither more
+nor less than it should. `register_panel` files the builder in an `App` global,
+which outlives the runtime, while the class is a `Persistent` QuickJS value that
+must be released while its context still exists. `ScriptPanelClass::retire`,
+called from `ShellRuntime::drop`, drops the class and leaves the registration in
+place — which turns those panels into exactly the placeholder case above.
 
 ---
 
@@ -2074,10 +2473,13 @@ is what happens when two of them are open at once.
 
 `ShellRoot` is that decision, and it is the only reason `root.rs` exists: a
 stacking order plus a dismissal order, with the smallest presentation that makes
-them visible. The first view of a shell window is always a `ShellRoot`, the same
-way the first view of a `gpui-component` window is always a `Root`, and a script
-reaches it only through `ShellRoot::update` — never by constructing overlays
-itself.
+them visible. The first view of a shell window is a `ShellRoot`, the same way the
+first view of a `gpui-component` window is a `Root` — or, when a catalog opens
+the window itself so that its own overlays find their `Root`
+(`ComponentWindowOpener`), the view directly inside that `Root`. A script
+reaches it only through `ShellRoot::update`, which looks in both places — never
+by constructing overlays itself. A view's `init` runs before its window has a
+root, so an overlay call made there is refused with a message that says so.
 
 **Stacking**, painted back to front: the script's content; at most one sheet,
 anchored to a viewport edge; the dialog stack in open order, each deferred at
@@ -2114,9 +2516,10 @@ timeout, and an optional id — which is what lets the root own the geometry and
 lifecycle without asking the script to render anything. Pushing the same id
 twice replaces rather than stacks, so a repeated "Saved" reads as one event.
 Three are mounted at a time and the rest wait, so a burst is throttled rather
-than lost. A 50 ms clock advances the lifecycle, paused while the stack is
-expanded or the window is inactive — a toast that expired unseen behind another
-window was never delivered.
+than lost. A 50 ms clock advances the lifecycle, paused while hover or focus
+holds the stack expanded — the user is reading it. An inactive window does not
+pause it: activation says nothing about whether the window is on screen, and a
+side-by-side or second-monitor window would otherwise hold its toasts forever.
 
 ### 16.2 The script surface
 
@@ -2232,7 +2635,15 @@ The public module is `fs/promises`; the callback-style `fs` name is deliberately
 not registered. `readFile(path)` resolves to `Uint8Array`, while an explicit
 `"utf8"` or `{ encoding: "utf8" }` resolves to text. `writeFile` accepts a string
 or `Uint8Array`. `readdir(path)` resolves to sorted names; pass
-`{ withFileTypes: true }` for `Dirent` objects with `isDirectory()`. The remaining
+`{ withFileTypes: true }` for `Dirent` objects with `isDirectory()`. `stat(path)`
+follows a symlink and `lstat(path)` does not; both resolve to a `Stats`-shaped
+object with `isFile()`, `isDirectory()`, `isSymbolicLink()`, `size`, `mode`, and
+`mtime`/`atime`/`birthtime` as `Date`s plus their `…Ms` numbers (a time the
+filesystem does not record reads as the epoch). `readlink(path)` resolves to the
+stored target text, which may name a place outside every root; reading the text
+is not following it. `stat`, `lstat`, and `readlink` need read access;
+`rename(from, to)` needs write access to both paths, because taking a file out
+of a directory changes that directory as much as putting one in. The remaining
 subset is `exists`, `unlink`, `rmdir`, and `mkdir`. Streams, file descriptors,
 watches, and sync operations are not part of the experimental contract.
 
@@ -2273,9 +2684,15 @@ flush barriers may wait for durability at once.
 ### 17.2 Network
 
 Three experimental surfaces are implemented. Global `fetch(url, options?)`
-supports bounded GET and POST requests, string or `Uint8Array` bodies, safe
-request headers, and resolves to `{ status, ok, url, , json() }`; both
-body readers return promises. The `gpui` module exports
+supports bounded requests of any HTTP method -- which methods actually reach a
+host is the capability policy's decision -- string or `Uint8Array` bodies, safe
+request headers, and resolves to
+`{ status, ok, url, text(), json(), arrayBuffer(), bytes() }`; every body reader
+returns a promise. The body is kept as bytes until a reader asks for text, so a
+binary download survives `arrayBuffer()` unchanged. Requests carry
+`User-Agent: gpui-shell/<version>` unless the script sets its own, because some
+APIs, GitHub's among them, refuse a request without one; the WebSocket handshake
+does the same. The `gpui-kit` module exports
 `WebSocket.connect(url, { headers }?)`, returning a socket with asynchronous
 text/binary `read`, `write`, and `close`. Bare module `net` provides raw
 `connect(host, port)` with bounded async `read` and `write`; its synchronous
@@ -2410,9 +2827,19 @@ script cannot tell the two apart.
 The `gpui-shell` binary installs the obvious policy for a host that _is_ the
 process: it ends it, with the code the script asked for.
 
-`process` is installed as a global as well as a `gpui` module member, because
+`process` is installed as a global as well as a `gpui-kit` module member, because
 `process` is the name a JavaScript author, or a model writing JavaScript, will
 reach for.
+
+An application also needs to know where things are. `process.dataDir` is its
+data directory (`Policy::with_data_dir`, which `set_bundle_id` sets);
+`os.homedir()` is the user's home; `import.meta.url` is the `file:` URL of the
+running module. None needs a grant: a path says where something is, and reaching
+it is still `capabilities.fs`'s decision. `process.env` is the exception, because
+an environment variable's _value_ can be a secret — it holds only the defaults
+in `crates/shell/src/default-env` and the names `capabilities.process.env` lists. `env` and `dataDir` are getters on the default
+object rather than named exports, so each read answers for the application whose
+code is running (§18.3).
 
 There is no streaming subprocess: pipe semantics conflict with the asynchronous
 model, and a case that needs streaming output belongs behind a host-registered
@@ -2446,13 +2873,13 @@ considered was a `native("workspace")` call answering with a frozen bag of
 functions. It loses twice, both times on when a mistake surfaces. A lookup puts
 every misspelled export on the run-time path, where an import fails while the
 module graph is linked. And a lookup leaves the generated declarations with
-nothing to say — only the host knows what it registered, so the best `gpui.d.ts`
+nothing to say — only the host knows what it registered, so the best `gpui-kit.d.ts`
 can offer for `native(name)` is `Record<string, (...args) => any>`, with any real
 types hand-written in a `.d.ts` that nothing checks against the registry. A
 module specifier is a name declarations can be written against, so §21 emits
 them from the registry itself.
 
-The import fixes the set of *names*, not the functions behind them: each export
+The import fixes the set of _names_, not the functions behind them: each export
 is a stub that resolves through `dispatch` on every call, so withdrawing a module
 still refuses the next call through an already-imported name. The consequence for
 a host is one ordering rule — `export_module` before `load_app`.
@@ -2472,7 +2899,7 @@ convenience. A handle would let the host keep a reference to a script value past
 the call that produced it and past the scope frame that made the surrounding
 context valid. It is also what lets one registry serve any engine, since
 neither engine's value type appears in `host_modules.rs`. It is also what rules
-out exporting a *class*: a constructor hands the script a live host object, and
+out exporting a _class_: a constructor hands the script a live host object, and
 object identity across the seam is the thing this boundary exists to prevent.
 
 **A host function may not re-enter the engine.** A host call happens inside
@@ -2574,8 +3001,8 @@ does, because the shape is what the design is about.
 
 ### 18.1 The manifest
 
-Six recognized fields: `id`, `name`, `version`, `shell-version`, `entry`, and
-`capabilities`. Only `id`, `name`, and `entry` are required. An omitted
+Seven recognized fields: `id`, `name`, `version`, `shell-version`, `entry`,
+`dependencies`, and `capabilities`. Only `id`, `name`, and `entry` are required. An omitted
 `version` is reported as `unknown`; an omitted `shell-version` accepts the
 current runtime; omitted `capabilities` grants nothing. The file is
 `gpui-shell.json` — the name makes the owning runtime explicit.
@@ -2585,8 +3012,11 @@ current runtime; omitted `capabilities` grants nothing. The file is
   "id": "com.example.inbox",
   "name": "Inbox",
   "version": "1.2.0",
-  "shell-version": "0.1.0",
+  "shell-version": "0.6.0",
   "entry": "main.js",
+  "dependencies": {
+    "omarchy-ui": "huacnlee/omarchy-ui#main"
+  },
   "capabilities": {
     "fs": {
       "read": ["${pluginDir}", "${dataDir}"],
@@ -2595,19 +3025,52 @@ current runtime; omitted `capabilities` grants nothing. The file is
     },
     "network": {
       "hosts": ["quotes.example.com"],
-      "http": [{
-        "scheme": "https",
-        "host": "api.example.com",
-        "methods": ["GET"],
-        "paths": ["/v1/account"],
-        "path_prefixes": ["/v1/quotes/"]
-      }]
+      "http": [
+        {
+          "scheme": "https",
+          "host": "api.example.com",
+          "methods": ["GET"],
+          "paths": ["/v1/account"],
+          "path_prefixes": ["/v1/quotes/"]
+        }
+      ]
     },
     "storage": true,
     "clipboard": { "write": true }
   }
 }
 ```
+
+`dependencies` maps a bare JavaScript module name to gpui-shell Git dependency
+syntax. A string may be strict GitHub shorthand (`owner/repository` or
+`owner/repository#ref`) or a full Git URL with optional `#ref`. GitHub shorthand
+without a fragment selects `main`; a full URL without one selects the remote's
+HEAD. A ref may name a branch, tag, or commit-ish such as a commit ID. Branches,
+tags, and remote HEAD are fetched and resolved on each load; a commit ID keeps
+selecting that exact commit.
+
+Once the immutable checkout exists, gpui-shell reads its root `package.json`.
+A string `main` selects the entry; if the file or field is absent, `index.js` is
+used. Invalid JSON, a non-string `main`, or a path that is missing, not a file,
+or outside the checkout fails the load before application code executes.
+
+The original object form remains supported unchanged. It requires exactly one
+explicit `branch` or `tag`, and its optional repository-relative `entry`
+defaults to `index.js`. Existing manifests need no migration. Authors choosing
+the string form publish their entry through `package.json` `main` or root
+`index.js`.
+
+Before linking the application module graph, the host fetches each repository
+into `~/.gpui-shell/cache/dependencies/`. A per-remote lock serializes local
+mirror updates; the fetched commit is atomically published as an immutable,
+commit-addressed checkout and registered with the application's module
+generation. The exact fragment-free URL is the remote and cache identity. The
+raw configured origin is verified, while Git's `url.*.insteadOf` rules may
+still choose the effective fetch URL. Git is non-interactive and each command
+has a 30-second timeout. Relative imports from dependency code remain inside
+its checkout, and runtime or Standard Runtime module names cannot be shadowed.
+This host-side acquisition step requires `git`; it does not grant the fetched
+script any network capability.
 
 `network.hosts` is the backwards-compatible broad grant: every supported
 network API may reach that host. Use `network.http` when a plugin only needs
@@ -2627,7 +3090,14 @@ code runs, so it belongs in data; a contribution is code, so it belongs in code.
 Declaring both would create a class of bug — manifest and script disagreeing —
 while producing no information the script did not already carry. The schema is
 generated from the types with `schemars`, following
-`crates/ui/src/theme/schema.rs`, so the schema and the parser cannot disagree.
+`crates/component/src/theme/schema.rs`, so the schema and the parser cannot disagree.
+
+`window` is the one field about presentation rather than permission or
+identity: `{ "width": 360, "height": 520 }` in logical pixels, the size the
+window opens at. It is data because the host opens the window before any
+script runs, so a script cannot say it in time; the person using the
+application can still resize the window, and an absent `window` keeps the
+host's default.
 
 Every parse failure names the field and says what was expected, because this is
 the first thing a plugin author meets and usually the only diagnostic they get:
@@ -2647,8 +3117,8 @@ must stay inside the data directory; and no uppercase, because two ids differing
 only in case are one directory on a case-insensitive filesystem and two
 everywhere else. When present, `version` must be semver-shaped, because it is
 compared across an upgrade. An explicit `shell-version` must also be SemVer and
-names the oldest compatible runtime; during `0.x`, compatibility stays on the
-same minor line. `entry` must be a path that cannot leave the plugin directory, which
+names the oldest compatible runtime; any runtime at or above that version is
+accepted. `entry` must be a path that cannot leave the plugin directory, which
 is the same rule the module resolver applies to every `import` — so a manifest
 cannot ask for a file the resolver would refuse anyway.
 
@@ -2662,6 +3132,39 @@ comes from the manifest and nowhere else; the two directories it is anchored to
 come from the host and nowhere else. A relative path is anchored to the plugin
 directory; an absolute path is taken as written, and is exactly the case a host
 policy or an approval prompt exists to gate.
+
+`${homeDir}` is the user's home directory (`HOME`, or `USERPROFILE`), so an
+application that manages the user's own files — `${homeDir}/.claude/skills` —
+can ask for them without hard-coding a user name. It grants nothing the
+equivalent absolute path would not; it only makes that path portable. When no
+home directory is known, a root under it is dropped from the grant rather than
+left as a relative directory named `${homeDir}` inside the plugin. `~/` is not
+expanded: it is shell syntax, and a placeholder that looks like the other two is
+one rule for an author to learn instead of two. Any other `${…}` is an error.
+A root that starts with `$HOME`, `${HOME}`, `$USERPROFILE`, `%USERPROFILE%` or
+`~` is refused by name with the `${homeDir}` spelling to use: without that
+check the unbraced forms are not placeholders at all and would quietly become a
+relative directory that grants nothing.
+
+A local run (`gpui-shell run`) _adds_ the application directory and its data
+directory to the manifest's roots. An earlier version replaced the manifest's
+roots with those two, which silently dropped every other directory the manifest
+asked for.
+
+`process.env` shows a default set of variables that describe the user's
+machine, session and preferences (`HOME`, `USER`, `HOSTNAME`, `LANG`, `TZ`,
+`PATH`, `EDITOR`, `DISPLAY`, the proxy settings, the XDG directories and their
+Windows counterparts) and are never tokens, keys or passwords, so an application does not have
+to list the same names every other one does. The set is maintained in one
+place, `crates/shell/src/default-env`, one name per line; a test in
+`capability.rs` refuses a duplicate, a malformed name, or one that looks like it
+holds a credential. `capabilities.process.env` lists anything beyond it. Names match without regard
+to case, because the same variable is spelled both ways (`http_proxy`,
+`HTTP_PROXY`) and Windows does not distinguish them; the list keeps one
+upper-case spelling and `process.env` reports the one the environment uses. The
+rest of the environment stays out of reach, because it routinely holds tokens
+and keys handed to the host rather than to every script it runs; `process.env`
+is always an object, so `process.env.X ?? fallback` works without a grant.
 
 `execute` is either an allowlist of command names or the string `"*"`.
 Unrestricted execution has to be spellable — a host that cannot express it pushes
@@ -2682,12 +3185,12 @@ runs at load and its only job is registration; the real implementation lives in
 other modules that a handler pulls in with a dynamic `import()` when it is
 triggered. That is why dynamic `import()` is deliberately left callable by the
 sandbox (§19.1) — it is the mechanism, not a hole. It also gives every plugin a
-non-zero start-up cost that has to be budgeted (§20.5), and makes "do real work
+non-zero start-up cost that has to be budgeted (§20.8), and makes "do real work
 in the entry module" a convention violation tooling can flag.
 
 Data lives under the plugin's `id` rather than under its path, so it survives an
-upgrade that moves the plugin directory — which is exactly what §23's path digest
-cannot do for a directory run from the command line.
+upgrade that moves the plugin directory. §23's path digest is only for a
+directory with no manifest, which has no `id` to use.
 
 ### 18.3 Authority travels with the code, not with the moment
 
@@ -2731,6 +3234,17 @@ inert manifest before code runs. A contribution registry is also missing: there
 is no `gpui.command`, `gpui.keymap`, `gpui.register_panel`, or
 `gpui.register_theme` for a script to register into.
 
+The command line host runs **one application per process**: `gpui-shell run <name>`
+runs the installed application `~/.gpui-shell/apps/<name>` (or
+`$GPUI_SHELL_HOME/apps/<name>`), `gpui-shell run -d <directory>` runs a directory,
+and with no argument it runs the application packaged beside the executable
+(`Contents/Resources/app` in a macOS bundle, `app` elsewhere). An installed or
+packaged application keeps its storage under its manifest `id`; a directory run
+by path is keyed by its path (§23). `list` reads manifests without executing
+anything, and `agents` writes generated development instructions for coding
+agents. Multi-application hosting stays the job of an embedding host and
+`PluginManager`.
+
 Today the grant comes from the host directly. Running a directory from the
 command line is an explicit act of trust, the same as `node app.js`, and
 `gpui-shell` grants read access to the application root and its storage
@@ -2755,14 +3269,14 @@ exposure is therefore concentrated in four places — what the host injected, pa
 from a string to executable code, module resolution, and the shared built-in
 prototypes.
 
-| Treatment            | Target                                                                           | Notes                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Never added**      | quickjs-libc's `std` and `os`                                                    | These provide `open`, `exec`, `getenv`, and `popen`; registering either is full access. `rquickjs` does not inject them and the shell never registers them. This is "never added" rather than "removed", which is an order of magnitude more reliable — and `rquickjs-sys` does not compile that file at all, so a test asserts their absence as a guard on the build |
-| **Withheld**         | `eval` and every function constructor                                            | `globalThis.eval` is deleted outright; the `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` constructors are replaced with throwing stubs                                                                                                                                                                                               |
-| **Replaced**         | The module resolver (static and dynamic `import` alike)                          | Resolves `gpui`, `gpui-base`, `gpui-fps`, the listed Standard Runtime bare modules, and paths inside the application root. `node:` names and unknown packages are refused before reaching the filesystem. Dynamic `import()` stays callable — it is how §18 does lazy loading                                                                                                                    |
-| **Frozen**           | `Object`, `Array`, `Function`, `String`, and `Number` prototypes                 | One VM hosts several plugins, so the built-ins are shared mutable state                                                                                                                                                                                                                                                                                               |
+| Treatment            | Target                                                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Never added**      | quickjs-libc's `std` and `os`                                                                       | These provide `open`, `exec`, `getenv`, and `popen`; registering either is full access. `rquickjs` does not inject them and the shell never registers them. This is "never added" rather than "removed", which is an order of magnitude more reliable — and `rquickjs-sys` does not compile that file at all, so a test asserts their absence as a guard on the build |
+| **Withheld**         | `eval` and every function constructor                                                               | `globalThis.eval` is deleted outright; the `Function`, `AsyncFunction`, `GeneratorFunction`, and `AsyncGeneratorFunction` constructors are replaced with throwing stubs                                                                                                                                                                                               |
+| **Replaced**         | The module resolver (static and dynamic `import` alike)                                             | Resolves `gpui-kit`, `gpui-base`, `gpui-fps`, the listed Standard Runtime bare modules, and paths inside the application root. `node:` names and unknown packages are refused before reaching the filesystem. Dynamic `import()` stays callable — it is how §18 does lazy loading                                                                                     |
+| **Frozen**           | `Object`, `Array`, `Function`, `String`, and `Number` prototypes                                    | One VM hosts several plugins, so the built-ins are shared mutable state                                                                                                                                                                                                                                                                                               |
 | **Capability-gated** | `fs/promises`, `process.run`, `process.exit`, `fetch`, `net.connect`, `websocket.WebSocket.connect` | §17; each async operation captures the caller's policy before leaving the VM                                                                                                                                                                                                                                                                                          |
-| **Throwing stub**    | `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`, `require`          | Present, and throwing a message that names the replacement                                                                                                                                                                                                                                                                                                            |
+| **Throwing stub**    | `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`, `require`                             | Present, and throwing a message that names the replacement                                                                                                                                                                                                                                                                                                            |
 
 Three of these are worth more than a table row.
 
@@ -2836,19 +3350,19 @@ persisting a decision in host configuration are all part of §18 and not built.
 
 ### 19.3 Resource limits
 
-| Limit             | Mechanism                                                | Value                                                                                                                                                          |
-| ----------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runaway execution | `Runtime::set_interrupt_handler`, on a per-call deadline | 50 ms in `Render`/`Layout`, 500 ms in `Event`/`Task`, 5 s outside any scope                                                                                    |
-| Memory            | `Runtime::set_memory_limit`                              | 256 MiB — a leak reports as a catchable exception on the offending allocation rather than an OOM kill of the host                                              |
-| Stack             | `Runtime::set_max_stack_size`                            | 1 MiB against QuickJS's 256 KiB default, so deep recursion is a `RangeError` a script can report rather than a native stack overflow, which is a process abort |
-| Microtask storms  | Bounded drain (§12.2)                                    | 100,000 jobs per drain                                                                                                                                         |
-| Host task fan-out | Per-runtime scheduler registry                           | 1,024 outstanding tasks                                                                                                                                        |
-| Module source     | Bounded module loader                                     | 8 MiB per module                                                                                                                                                |
-| Filesystem output | Bounded adapters                                          | 8 MiB per `writeFile`; `readdir` stops at 10,000 entries or 1 MiB of names                                                                                      |
-| Store             | Bounded cache and barriers                               | 8 MiB total; 4,096 keys; 1 MiB per value; 1,024 pending flush waiters                                                                                           |
-| Assets            | Bounded asset source                                     | 16 MiB per asset; listing stops at 10,000 entries or 1 MiB of names                                                                                             |
-| WebSocket queue   | Bounded actor channel                                     | 8 combined read/write/close commands                                                                                                                            |
-| Child processes   | Bounded adapter plus cancellation hook                   | 30 seconds; 8 MiB stdout and 8 MiB stderr; kill and reap on timeout, overflow, cancellation, owner loss or runtime shutdown                                    |
+| Limit             | Mechanism                                                | Value                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runaway execution | `Runtime::set_interrupt_handler`, on a per-call deadline | A watchdog for scripts that never return, not a performance budget: 2 s in `Render`/`Layout`, 5 s in `Event`/`Task`, 10 s outside any scope. A call that is only slow logs a warning (100 ms in `Render`/`Layout`, 1 s elsewhere) and is not stopped                                                                                                                                     |
+| Memory            | None                                                     | Unbounded, as in a GPUI application written in Rust: the operating system manages memory. A 256 MiB ceiling turned a large data set into a broken application long before the machine was short of memory. An embedding host may still bound its own runtime; exhaustion is reported as running out of memory rather than as the `null` QuickJS throws when it cannot allocate the error |
+| Stack             | `Runtime::set_max_stack_size`                            | 1 MiB against QuickJS's 256 KiB default, so deep recursion is a `RangeError` a script can report rather than a native stack overflow, which is a process abort                                                                                                                                                                                                                           |
+| Microtask storms  | Bounded drain (§12.2)                                    | 100,000 jobs per drain                                                                                                                                                                                                                                                                                                                                                                   |
+| Host task fan-out | Per-runtime scheduler registry                           | 1,024 outstanding tasks                                                                                                                                                                                                                                                                                                                                                                  |
+| Module source     | Bounded module loader                                    | 8 MiB per module                                                                                                                                                                                                                                                                                                                                                                         |
+| Filesystem output | Bounded adapters                                         | 8 MiB per `writeFile`; `readdir` stops at 10,000 entries or 1 MiB of names                                                                                                                                                                                                                                                                                                               |
+| Store             | Bounded cache and barriers                               | 8 MiB total; 4,096 keys; 1 MiB per value; 1,024 pending flush waiters                                                                                                                                                                                                                                                                                                                    |
+| Assets            | Bounded asset source                                     | 16 MiB per asset; listing stops at 10,000 entries or 1 MiB of names                                                                                                                                                                                                                                                                                                                      |
+| WebSocket queue   | Bounded actor channel                                    | 8 combined read/write/close commands                                                                                                                                                                                                                                                                                                                                                     |
+| Child processes   | Bounded adapter plus cancellation hook                   | 30 seconds; 8 MiB stdout and 8 MiB stderr; kill and reap on timeout, overflow, cancellation, owner loss or runtime shutdown                                                                                                                                                                                                                                                              |
 
 The budget is per host call, not global: every `scope::enter` mints a fresh
 generation, and a change of generation is the signal that a new call has begun
@@ -2988,10 +3502,10 @@ for C is the assertion itself.
 The first Standard Runtime release baseline was recorded on 2026-08-25 on
 Apple Silicon macOS with a release build:
 
-| Standard Runtime build metric | Baseline |
-| --- | ---: |
-| `gpui-shell` executable | 28,540,608 bytes (27.2 MiB) |
-| `gpui-shell check examples/js_todolist` wall time | 1.19 s |
+| Standard Runtime build metric                       |                    Baseline |
+| --------------------------------------------------- | --------------------------: |
+| `gpui-shell` executable                             | 28,540,608 bytes (27.2 MiB) |
+| `gpui-shell check examples/js_todolist` wall time   |                      1.19 s |
 | Maximum resident set reported by `/usr/bin/time -l` | 65,781,760 bytes (62.7 MiB) |
 
 The pre-LLRT branch did not record equivalent startup or size figures, so this
@@ -2999,13 +3513,85 @@ is the reproducible comparison point for subsequent LLRT revision or feature
 changes rather than a retroactively estimated delta. Measurements are platform
 and linker specific; CI correctness gates do not assert these absolute values.
 
-### 20.4 What is left
+### 20.4 The view as the invalidation boundary
+
+A script `render` describes one view **completely**. There is no partial
+rebuild inside it: `cx.notify()` on a view whose description is four hundred
+nodes rebuilds four hundred nodes, whatever prompted it. So the cost model of
+§20.2 is not paid per window or per panel. It is paid per **view that was
+invalidated**, and the application decides how large that is.
+
+`cx.new(Class, props)` is what makes it smaller. A nested view is its own
+`ScriptView` entity with its own snapshot and its own dirty flag (`view.rs`), so
+three things hold:
+
+| Event                          | What enters the VM                                                                                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A child calls `cx.notify()`    | That child's `render`                                                                                                                                                  |
+| The parent calls `cx.notify()` | The parent's `render`. Each child answers the frame from the snapshot it already published — `ScriptView::render` materializes without rebuilding when it is not dirty |
+| `entity.set_props(props)`      | That child's `update` and `render`. The parent is not rebuilt, which `tests/render.rs` asserts directly                                                                |
+
+The middle row is the load-bearing one. Mounting a child is recording a handle
+(`Component::ChildView`), and materializing that handle is a GPUI entity render,
+not a script render. Rebuilding a five-panel window therefore costs the parent's
+own description plus four entity renders that never reach the engine.
+
+This is the granularity lever, and unlike everything in §20.6 it is already
+built. It also settles a question that keeps being asked the wrong way round:
+splitting an application for performance means splitting it into **views**, not
+into plugins, applications, or processes. A second application is how a second
+_authority_ is obtained (§18), not how a second cache is.
+
+What is missing is attribution rather than mechanism. `RuntimeMetrics` counts
+the runtime, not the view, so "which boundary is being rebuilt, and how large is
+it" has to be assembled from `ScriptView::is_dirty` and `snapshot().len()` by
+hand. Per-view counters are the diagnostic this chapter is short of; §20.5 is
+the other half of the same gap.
+
+### 20.5 Rendering frequency and presentation latency
+
+§20.1 separates two frequencies. Diagnosis needs a second separation, between
+two _latencies_, because the design's own success at the first one hides the
+second:
+
+```text
+rendering FPS          is the frame smooth?
+state → presentation   how long after state changes does the reader see it?
+```
+
+Explicit invalidation has a symmetric pair of failure modes, and only one of
+them is visible to any frame measurement:
+
+- **Notifying too often** costs script renders that describe things nobody can
+  see. It shows up as `script_renders` per second above the rate the data
+  changes, and eventually as dropped frames.
+- **Notifying too late, or not at all** costs nothing at all on the frame
+  budget. GPUI keeps replaying the last good description at full rate, so the
+  HUD reads a steady 120 FPS while the interface shows something that stopped
+  being true, and then jumps when something unrelated invalidates the view.
+
+The second is the one this architecture makes newly possible. Under a
+render-per-frame model a stale view could not exist for longer than a frame; here
+it can persist indefinitely and every rendering metric will call it healthy.
+Benchmark C (§20.3) asserts one direction — a clean view enters the VM zero
+times — and nothing asserts the other, because "a render that should have
+happened" is a statement about application intent that the runtime cannot
+derive.
+
+What follows is a reporting rule rather than a mechanism: performance work on a
+script application must state which of the two numbers it moved. An FPS reading
+that never dropped is not evidence that invalidation is correct, and the
+`gpui-shell` metrics surface should grow a state-to-presentation figure — a
+timestamp carried from the host state change to the materialization that first
+showed it — before it grows anything else.
+
+### 20.6 What is left
 
 **Virtualization stays in Rust.** `VirtualList` and `Tree` call back only for
 visible items, so a ten-thousand-row list costs the same in script as a
 hundred-row one. `VirtualList` is bound; `Tree` is not. (`Table` is not on this
 list: base's `Table` is a plain composition of `Stateful<Div>`s and renders
-every row it is given. The virtualized one is `crates/ui`'s `DataTable`.)
+every row it is given. The virtualized one is `crates/component`'s `DataTable`.)
 
 **Reduce `C_op` itself — done for styles and for `child`.** The specialized
 forwarders this section used to propose are now what the prelude binds.
@@ -3033,13 +3619,462 @@ already done (§8.4), which took most of what memoization was originally for; wh
 is left is worth doing only for views where one small region changes constantly
 and the rest is large. Not implemented (§8.6).
 
+**A template cache** would split a description into a reusable structure and the
+dynamic slots inside it, so a value-only change writes slots instead of running
+the builder again. It is the largest unspent lever here and the one that
+addresses the path §8.4 left alone — an invalidated view whose structure did not
+change. §20.7 states what it would be, the four problems it has to solve, and
+what to measure before building any of it.
+
 **Reuse argument objects.** The context objects handed to item renderers and
 dock renderers should be pre-allocated and reused rather than built per row.
 
 **Never let script participate** in layout, text shaping, scroll offsets,
 animation interpolation, or hit testing.
 
-### 20.5 Start-up
+### 20.7 The template cache
+
+Built, measured, and deliberately not exposed. This section states what a
+template is, what has to be true for it to pay, what it turned out to be worth,
+and what is left.
+
+**The conclusion first**, because the rest of the section is how it was reached.
+All figures are release builds, best of seven batches of fifty, on one Linux
+x86-64 machine:
+
+| Question                                       |                                                                Answer | Where                    |
+| ---------------------------------------------- | --------------------------------------------------------------------: | ------------------------ |
+| Does a dirty render usually repeat its shape?  |                                     **40 of 40** on a live quote feed | `stories/shell_story.rs` |
+| How much of a repeating description varies?    |                     **80 of 1,045** positions — half of them handlers | `tests/structure.rs`     |
+| What does filling cost against rebuilding?     | 0.315 → 0.036 ms, **8.7×**; with the handlers it still pays, **5.3×** | `tests/structure.rs`     |
+| What is it worth to a script written for it?   |                                            0.310 → 0.090 ms, **3.5×** | `tests/template.rs`      |
+| What is it worth with **no** authoring change? |                                           0.339 → 0.272 ms, **1.25×** | `tests/template.rs`      |
+| What can the recorder save on its own?         |                                              0.628 → 0.573 ms, **8%** | benchmark A              |
+
+The last two rows are why there is no `template(...)` in the script surface. A
+template a script has to be written for is a performance annotation in the
+source — two ways to describe one interface, and a decision nobody should be
+making while writing a panel — and the automatic version of it is worth a
+quarter, not a factor of three.
+
+**What the snapshot cache does and does not cover.** §8.4 removed the cost of
+_no change_: an unchanged view is replayed in Rust and enters the VM zero times
+(benchmark C). It did not touch the cost of a _small_ change. A snapshot holds
+structure and values in the same nodes:
+
+```text
+StockRow
+├── Text("AAPL")
+├── Text("230.42")
+└── Text("+1.42%")
+```
+
+When the price becomes `230.51` the structure is identical and one leaf differs,
+but a description is produced by running the builder, so the whole view is
+described again — every `div()`, every `.gap()`, every `.bg()`, every crossing
+recorded into a fresh `SpecArena`. That is the dirty-render path, and on a feed
+it is the path that runs.
+
+So there are three levels rather than two:
+
+| Level              | Condition                        | Cost                                               | State                     |
+| ------------------ | -------------------------------- | -------------------------------------------------- | ------------------------- |
+| 1 — snapshot cache | Nothing invalidated the view     | Materialization only, zero VM entries              | Built (§8.4)              |
+| 2 — template cache | Invalidated, structure unchanged | Write the changed values into a retained structure | Built, reaching no script |
+| 3 — full render    | Invalidated, structure changed   | `render` runs, a description is recorded           | Built                     |
+
+#### What a template would be
+
+The IR already has the right shape to cut. A `SpecArena` is `Vec<SpecNode>`, and
+a `SpecNode` is a `Component`, a `SmallVec<[SpecOp; 8]>` and a child list
+(`spec.rs`). A template is that arena with holes:
+
+```rust,ignore
+struct Template {
+    /// Structure and every constant op, recorded once.
+    arena: SpecArena,
+    /// Where this render's values go, in the order the script supplies them.
+    slots: Box<[Slot]>,
+}
+
+struct Slot {
+    node: SpecId,
+    site: SlotSite,
+}
+
+enum SlotSite {
+    /// A payload carried by the constructor: `Component::Text(String)`,
+    /// `Component::Button(String)`.
+    Component,
+    /// One `Bridged` argument of a recorded `ParamStyle` or `Method`.
+    OpArgument { op: u16, argument: u8 },
+    /// A `CallbackId` in a `Callback` or `ActionCallback`.
+    Handler { op: u16 },
+}
+```
+
+Filling it is a walk over `slots` writing `slots.len()` values, not a walk over
+`arena.len()` nodes. That is the entire proposition: a 443-node panel with 4,430
+recorded operations has, on a quote tick, on the order of _tens_ of varying
+values.
+
+#### The four problems, in the order they bite
+
+**1. Validity has to be O(slots), not O(nodes).** A template hit that is
+established by comparing this render's description against the cached one has
+already paid for producing this render's description, which is the cost being
+removed. Validity must therefore come from _which template the script selected_,
+before any builder call is made — not from a comparison after the fact. Every
+design decision below follows from this one.
+
+**2. The win only exists if the builder calls are not made.** §20.6 puts the
+floor at roughly 60 ns of QuickJS interpreting a builder method and 30 ns for
+the crossing, per recorded call. Reusing the arena on the Rust side while
+JavaScript still runs `div().flex().gap(4).p(8).bg(…)` removes the smaller half
+and leaves the interpreter cost untouched. A template cache that saves 30% is
+not worth the machinery; one that removes the builder calls is. This is what
+makes it a _language surface_ question rather than an arena optimization.
+
+**3. Handlers are not values.** Every `on_click(() => …)` allocates a closure
+that captures this render's state and registers a `CallbackId` retired with the
+snapshot generation (§8.4, `snapshot.rs`). A template can hold the handler
+position as a slot, but something still has to produce a closure per render
+unless the capture is lifted into an argument. A row with a handler on it will
+not be free, and the achievable win is bounded by how much of a description is
+handlers rather than structure — which is worth counting on a real panel before
+anything else.
+
+**4. Some ops look constant and are not.** `bg(cx.theme().colors.surface)`
+records a resolved colour, so a palette change alters an op that no script
+expression appears to vary (§13.3, §8.4). The same holds for any value read from
+a HostModule while describing, and for `t()`-style locale lookups. Either those
+become slots too — which grows the slot list well past the values the author
+thinks of as dynamic — or a template is invalidated wholesale by a theme or
+locale change, which is the honest and much simpler rule.
+
+#### Loops and conditionals are not the obstacle
+
+A repeated structure is the _best_ case, not the worst. In
+
+```js
+items.map((item) => h_flex().child(text(item.symbol)).child(text(item.price)));
+```
+
+the item count varies while the body's structure does not, so one row template
+is instantiated _n_ times. Virtual list rows, table cells, tree items and menu
+items are all this shape, and they are the highest-density recorded-call sites
+in a real application.
+
+A conditional is a small set of stable structures rather than an unstable one:
+
+```text
+Variant 0 → loading
+Variant 1 → content
+```
+
+A template cache does not require one structure forever. It requires a _bounded_
+number of them, selected by something cheaper than describing them. That is the
+same requirement as problem 1, stated from the other side.
+
+#### Where the separation could come from
+
+Four shapes, and the design's existing commitments eliminate two of them.
+
+| Shape                                                                                                               | How structure and values separate         | Verdict                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Build-time transform** — lift each `render` body's static chains into a template constant, leave a value function | Automatic, full win                       | **Out of scope.** It is a compile step, which §5.3 and §24 reject by name, and it costs the source-map-free line numbers of §21.1                     |
+| **Engine call-site keys** — key a template on the QuickJS bytecode position of the builder chain                    | Automatic, no source change               | Reaches into the engine's internals from above the seam (§6.5), and the seam exists to keep exactly this out of the contract                          |
+| **Author-declared templates** — an explicit form the script opts into, carrying its own key and its values          | Explicit, full win, no compile step       | The only shape that fits the design as written. Costs an API and asks the author to mark hot paths — see the next section for what it would look like |
+| **Record and compare** — record as today, hash the structure, reuse on a match                                      | No win on the JavaScript side (problem 2) | Not a shipping design, but the right _instrumentation_ — see below                                                                                    |
+
+The author-declared shape is also the one that composes with `gpui.memo`
+(§8.6, §20.6) rather than replacing it. The two cache opposite halves: memo
+reuses a subtree whose **values** did not change, a template reuses a structure
+whose values **did**. A panel wants both — memo the chrome, template the rows.
+
+#### The surface: a template discovers its own slots
+
+> Written before the mechanism was built. It is accurate about how discovery
+> works — that part is implemented and tested — and wrong about the conclusion:
+> the surface below is not shipped, because measuring it showed that what an
+> author has to write for is worth 3.5× and what a wrapper can take on its own
+> is worth 1.25×. Read it for the mechanism, then read what follows.
+
+The author-declared shape is the only one the table leaves standing, and what it
+left open is what that shape _looks like_ — because a form asking the author to
+write a second language is §5.3's DSL under another name.
+
+It does not have to be one. The separation can be discovered at run time, by
+calling the body once with values that are not values:
+
+```js
+import { template } from "gpui-kit";
+
+const Row = template((symbol, price, onSelect) =>
+  h_flex().gap(6).py(2)
+    .child(div().w(80).text_sm().child(symbol))
+    .child(div().w(80).text_sm().child(price))
+    .child(Button.new("trade").on_click(onSelect).child("Trade")));
+
+render() {
+  return v_flex().children(
+    this.quotes.map((quote) =>
+      Row(quote.symbol, quote.price, () => this.select(quote))),
+  );
+}
+```
+
+The body is ordinary builder code. On its first call the runtime runs it once
+with a **sentinel** in each parameter position, records the description exactly
+as it records any other, and notes every place a sentinel came to rest — a text
+child, a style argument, a handler. What is left over is the structure, and the
+notes are the `slots` list of the IR above. Every call after that grafts the
+structure and writes the arguments into the slots: no builder call is made,
+nothing crosses the bridge, and no JavaScript runs beyond the caller's own
+`map`.
+
+Three properties are what make this work where a call-site key would not:
+
+- **Validity is O(slots).** The template is selected by _which function was
+  called_, before any builder call — which is problem 1's requirement, met by
+  construction rather than by a comparison after the fact.
+- **There is no compile step.** `template(...)` is a function, its body is
+  JavaScript, and a reported line number is still a source line number
+  (§5.3, §21.1).
+- **A variant is a second template.** A conditional inside a body would freeze
+  at discovery, so the rule is that a body has none: a loading state and a
+  content state are two templates. That is the variant story written by the
+  author rather than inferred, and it is the honest version of it.
+
+And two rules the runtime has to _enforce_ rather than document:
+
+- **An argument may be passed through, not computed on.** `price` may be handed
+  to `.child(...)`; `` `${price}` `` would consume the sentinel during discovery
+  and bake a constant into the structure. So the sentinel refuses to become a
+  primitive — `Symbol.toPrimitive`, `toString` and `valueOf` all throw a message
+  naming the rule — and the mistake is a diagnostic at first use rather than a
+  panel that silently stops updating. Formatting belongs at the call site, where
+  it is a value being computed rather than a structure being described.
+- **A handler must arrive as an argument.** A closure written inside the body is
+  created once, at discovery, and would capture that call's values for the life
+  of the template. A body that registers one is refused for the same reason.
+
+The second rule is also where the ceiling sits. A handler passed in is allocated
+and registered per call, which is exactly the cost the census below says a
+template cannot remove.
+
+#### Why this comes before a QuickJS JIT
+
+A JIT makes the same JavaScript run faster. It does nothing to the rest of the
+path — the crossing, the `Bridged` conversion, the `SmallVec` push, the arena —
+and §20.6 measures roughly a third of a recorded call in exactly those. A
+template removes the work instead of accelerating it, and it removes the part a
+JIT cannot reach. Given that §20.6 has already taken the cheap wins on `C_op`
+and reports the remainder as a floor, "do less" is the only lever left with an
+order of magnitude in it.
+
+#### What was measured
+
+Steps 1 and 2 below are built and have run. The instrumentation is
+[`StructureFingerprint`](../crates/shell/src/spec.rs) — a hash of a
+description's shape accumulated _while it is recorded_, with payloads and
+`CallbackId`s deliberately left out — surfaced as
+`RuntimeMetrics::structure_repeats`, `structure_changes` and
+`structure_repeat_rate`, compared in `ScriptView::rebuild`, and reported live
+under the Shell story's counters. **Nothing acts on it.** It is a reading, and
+§20.7's first problem is exactly why it cannot become a cache as it stands.
+
+Three results.
+
+**The assumption holds.** On the Shell story's own board — twenty rows of six
+cells fed by a live market entity, written before this question was asked —
+**40 of 40** quote-driven rebuilds produced the structure they replaced
+(`stories/shell_story.rs`). A moving price is a value, not a
+structure, and the runtime rebuilds all of it anyway.
+
+**The slot ceiling is about 4%, and half of it is handlers.** On a 40-row
+watchlist — 361 nodes, 684 recorded operations, 1,045 addressable positions —
+a value-only tick differs in **80** of them (`tests/structure.rs`):
+
+|                                                  |  Count |              Share |
+| ------------------------------------------------ | -----: | -----------------: |
+| Nodes                                            |    361 |                    |
+| Recorded operations                              |    684 |                    |
+| Component payloads that differ (the prices)      |     40 |     11.1% of nodes |
+| Argument values that differ                      |      0 |   0% of operations |
+| Handler operations, which differ by construction |     40 | 5.8% of operations |
+| **Positions a rebuild actually changes**         | **80** |  **7.7% of 1,045** |
+
+So a template would reuse 96% of the description and write 4% of it — and half
+of what it writes is handler registration, which problem 3 says a template
+cannot fill. The reusable share is real; the _saving_ is bounded by the closure
+allocation and callback registration that stay.
+
+**The measurement is free.** Benchmark A on the 443-node panel, best of seven
+batches of fifty, release build, one Linux x86-64 machine: **0.628 ms** before
+the fingerprint and **0.623 ms** after. Two or three mixes per recorded
+operation sit below the noise of the measurement they are inside, which is why
+the counter is always on rather than behind a flag.
+
+**And filling is worth about 5× on that panel, not 30×.** The fill path is
+priced without the surface, by replaying the same watchlist into a fresh arena
+through `push` / `push_op` / `attach` — the exact calls an instantiation would
+make, with no JavaScript, no bridge crossing and no `Bridged` conversion
+(`tests/structure.rs`). Release build, same machine and method:
+
+|                                                           |                                  Per build |
+| --------------------------------------------------------- | -----------------------------------------: |
+| Rebuild: script → snapshot                                |                               **0.315 ms** |
+| Fill: replay the structure and write the slots            |                        **0.036 ms** — 8.7× |
+| The same panel rebuilt with its forty `on_click`s removed |                                   0.292 ms |
+| …so the handlers cost                                     | **0.023 ms**, and a template pays them too |
+| **Fill + handlers**                                       |                    **0.060 ms** — **5.3×** |
+
+The 8.7× is a floor with the hard part left out; the 5.3× is the number to plan
+against, and the gap between them is problem 3 priced rather than argued.
+Neither includes selecting the template and its variant, which the surface above
+makes a property lookup rather than a search — but which is not zero.
+
+#### What a template costs to keep
+
+A template outlives every render that uses it, which is the point of it and also
+the reason nothing in a render would ever free one. Left alone, the store would
+grow by one recorded arena per `template(...)` call site **per hot reload**: a
+reload re-evaluates the module, the closure's cached id is gone with it, and
+discovery runs again.
+
+So a template holds the `ApplicationGeneration` of the script that defined it,
+and `release_application_generation` — the same release that retires that
+application's callbacks and tasks — empties its templates. The slot in the store
+stays, because a template's id is its index and a closure in a still-loaded
+module may hold one; what is freed is the arena, which is all of the memory. A
+script reaching a retired id is told so rather than handed another
+application's structure.
+
+That leaves the runtime with no cache that grows with time. A snapshot is two
+descriptions per live view (§8.4), retired with the view; callbacks are retired
+with the snapshot that registered them; templates are retired with the
+application that defined them.
+
+#### What that licenses, and what it does not
+
+It licenses designing the surface. The assumption the whole idea rested on is
+not merely plausible on a real script — it was unanimous on the workload
+measured, which is the outcome that makes an author-declared template worth an
+API rather than a note.
+
+It does not license expecting the full `C_op` back. The census and the fill
+measurement size problem 3 rather than dissolving it: a panel with one button
+per row spends half its write set on handlers, and _that_ half is not builder
+calls a template skips — it is closure allocation and registration that happen
+whether or not the structure was reused. On the watchlist they are 7% of the
+rebuild and 38% of what the fill would still cost. A panel with fewer handlers
+per row does better; one that is mostly controls does worse.
+
+Two things are still unmeasured. The Longbridge terminal of §20.3 is a larger
+and less obliging workload than the story's board, and its rate is the one that
+should decide the API. And nothing has yet established that an author-declared
+template can be made to read like ordinary builder code — which is the whole
+reason §5.3's refusal of a DSL is not also a refusal of this.
+
+#### What was built, and what it turned out to be worth
+
+The mechanism is implemented in `engine/quickjs/template.rs` and
+`SpecArena::graft` / `write_slot`. **It is not part of the script surface**, and
+the measurements below are why.
+
+Sentinel discovery works exactly as sketched. A body is run once with a sentinel
+in each parameter position; wherever a sentinel comes to rest is a slot; every
+call after that grafts and fills. `tests/template.rs` pins the behaviour and the
+five refusals — a computed argument, an inline handler, a parameter that fills
+nothing, a nested template, a slot in a position a template cannot fill — and
+one test asserts that a filled template's description is byte-identical to the
+builder chain it replaces.
+
+**Explicitly written for, it is worth 3.5×.** Two 40-row watchlists describing
+the same rows, release build, best of seven batches of fifty:
+
+|               |    Per build |
+| ------------- | -----------: |
+| Builder chain | **0.310 ms** |
+| Template      | **0.090 ms** |
+
+Slightly under the 5.3× the fill measurement predicted, and the gap is what the
+fill measurement left out: the JavaScript call itself, its argument array, and
+one bridge crossing per argument.
+
+**Automatically, with no authoring change, it is worth 1.25×.** This is the
+number that decides the chapter, because a template a script has to be written
+for is a performance annotation in the source — two ways to describe one
+interface, and a decision nobody should be making while writing a panel.
+
+An automatic wrapper is safe by construction if it refuses any body where a
+sentinel is read and does not land in the description: a conditional on an
+argument reads without landing, a computed one throws on coercion, and both are
+caught. The question is what survives that rule on code nobody wrote for it. The
+Shell story's own `ui.js` answers it:
+
+| Helper                                                                 | Automatic?                                                          |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `title`, `label`, `muted`, `rule`                                      | **Yes.** One varying value handed straight to a builder call        |
+| `cell(width, options)`, `watchMarker(watched)`, `action(…, {primary})` | No. An argument decides _structure_, through a ternary or a `when`  |
+| `quoteRow(quote, onClick, cx)`                                         | No. ``Button.new(`quote-${quote.symbol}`)`` computes on an argument |
+
+Measured on a board of that shape — twenty rows of six cells, with only the
+first group templated:
+
+|                            |            Per build |
+| -------------------------- | -------------------: |
+| Helpers as plain functions |         **0.339 ms** |
+| Helpers templated          | **0.272 ms** — 1.25× |
+
+So the automatic ceiling is a quarter, not a factor of three. The gap is not the
+mechanism; it is that ordinary presentation code interpolates strings and
+branches on its arguments constantly, and both are exactly what a template
+cannot hold.
+
+For comparison, the other automatic lever — reusing the recorder's own work
+rather than the script's — is smaller still. Removing the eager
+`style::apply_param` check entirely, which is the largest single thing a
+same-shape rebuild could skip, moves benchmark A from 0.628 ms to 0.573 ms: 8%.
+That is the shape of everything on the Rust side of the crossing, because
+§20.6's floor says roughly 90 ns of a 140 ns recorded call is the interpreter
+and the crossing, and neither is reachable while JavaScript is still driving the
+description.
+
+#### Where that leaves it
+
+The mechanism stays, unexposed, reachable as `globalThis.__template` for the
+tests that pin it. Three reasons not to delete it and not to ship it:
+
+1. **The measurement is the deliverable.** "A template cache is worth 3.5× if
+   written for and 1.25× if not" is a fact about this runtime that had to be
+   built to be known, and it is what any later attempt should start from.
+2. **The one place it pays automatically is a loop the runtime already owns.**
+   A virtual list's item renderer is called from the layout pass, twice a frame
+   per list, and the runtime — not the script — decides how many times. A row
+   template discovered there costs the author nothing and is paid back per
+   frame rather than per invalidation. That is the remaining piece of work worth
+   doing, and it needs no script surface at all.
+3. **Composition is the limit, and it is liftable.** A template body may not
+   call another template today, so a template can only be a leaf. Lifting it —
+   letting an outer sentinel flow into an inner template's slot during discovery
+   — is small, and it is what would let a whole panel be one template rather
+   than a row. It does not change the 1.25×, because what blocks composition on
+   real code is string interpolation rather than the restriction.
+
+#### What is left to do, in order
+
+3. **Discover row templates inside the virtual list.** The one place the win
+   is automatic _and_ large, because the runtime owns the loop and the rows are
+   already on the frame budget rather than on an invalidation. No script
+   surface, and the fallback rule above is the safety net.
+4. **Lift the nesting restriction** if a whole panel is ever worth templating,
+   which the 1.25× says it is not yet.
+5. **Re-run the census on the terminal** before spending anything more here, and
+   record the number beside the story's.
+
+### 20.8 Start-up
 
 The start-up budget — under 2 ms for VM creation and sandbox trimming, under
 5 ms for global registration including the reflection table, under 1 ms for the
@@ -3155,7 +4190,7 @@ errors, unresolved imports, a missing or malformed default export, unknown style
 methods with a suggestion, wrongly typed style arguments, and an element used
 twice. `--print-spec` additionally prints the description tree.
 
-`gpui-shell types <directory>` writes `gpui.d.ts` (§14.4), which moves a second
+`gpui-shell types <directory>` writes `gpui-kit.d.ts` (§14.4), which moves a second
 class of mistake earlier still, into the editor.
 
 There is no DevTools panel. The intended form — a debug panel written in the
@@ -3199,7 +4234,7 @@ missing. Every one of these asserts on the _message_, because the message is the
 instruction for fixing it.
 
 These are security assertions and are not subject to the "avoid trivial tests"
-exemption in `.claude/COMPONENT_TEST_RULES.md`.
+exemption in `.agents/COMPONENT_TEST_RULES.md`.
 
 Two of them are regression guards on the build rather than on this code:
 quickjs-libc's `std` and `os` are asserted absent because `rquickjs-sys` does not
@@ -3281,7 +4316,7 @@ tests that catch a duplicated element id or a missing hitbox.
 
 ### 22.6 Relation to the repository's testing rules
 
-Following `.claude/COMPONENT_TEST_RULES.md`: no tests assert presentation
+Following `.agents/COMPONENT_TEST_RULES.md`: no tests assert presentation
 dimensions, and coverage concentrates on complex logic — call-scope validity,
 arena reuse errors, snapshot lifecycle and render frequency, callback lifetime,
 value conversion, style table non-emptiness, sandbox boundaries, overlay ordering
@@ -3333,20 +4368,22 @@ can fail, since a caller who mistyped a flag is exactly the caller who needs
 Usage errors exit 2; a runtime that fails to start exits 1.
 
 **Storage is per application, under the user's data directory, keyed by the
-canonical path of the application root.** The path is
-`<data home>/gpui-shell/apps/<directory name>-<16 hex digits>/store.json`, where
+manifest `id`.** The path is `<data home>/gpui-shell/apps/<id>/store.json`,
+whether the application is run with `-d`, installed or packaged, so a copy being
+edited and the installed copy share their data and the path an application shows
+its user is predictable. Script reads the directory as `process.dataDir`.
+
+A directory without a manifest has no `id`, and is keyed by its canonical path
+instead: `<data home>/gpui-shell/apps/<directory name>-<16 hex digits>/`, where
 the digits are an FNV-1a hash of the canonical root — not a security boundary,
 just enough to keep two directories from sharing a folder. Keeping the directory
-name in the path makes the folder recognizable; the digest disambiguates it, so
-two checkouts of the same application are genuinely different installations.
+name in the path makes the folder recognizable; the digest disambiguates it.
 `<data home>` honors `XDG_DATA_HOME`, and otherwise follows the platform
 convention — `~/Library/Application Support` on macOS, `%APPDATA%` on Windows,
 `~/.local/share` elsewhere.
 
 Storage lives outside the application directory because that directory may be
 read-only, is often a git checkout, and is not where a user expects their data.
-When the plugin model lands, a manifest `id` should replace the digest, so an
-installed plugin keeps its data across an upgrade that moves it.
 
 Assets — the files `svg(path)` names — are served from the application directory
 and nowhere else, with the same traversal check as the module resolver. Note the
@@ -3365,9 +4402,7 @@ When present, the manifest's `shell-version` is the oldest compatible
 gpui-shell release the application requires. Omitting it accepts the current
 runtime. It is checked before the entry module executes, so a
 mismatch is a load error rather than an exception in the middle of an
-interface. Compatibility follows SemVer: before 1.0 the runtime and requirement
-must share a minor line; from 1.0 onward they must share a major line, and the
-runtime must never be older than the requirement.
+interface. A runtime is compatible when it is not older than the requirement.
 
 The engine belongs in neither the version number nor the manifest: one version
 number must mean the same capabilities and the same behavior under either engine.
@@ -3375,7 +4410,7 @@ number must mean the same capabilities and the same behavior under either engine
 No packaging or distribution format exists. The intended one is the simplest
 thing that works — a `.tar.zst` plus an `index.json`, hosted on any static file
 server or git repository, installed by URL with a signature and checksum check,
-carrying pure script source with no build output and no `node_modules`. Building
+carrying pure script source with no generated dependency tree. Building
 a registry service before the plugin count justifies one would be pure
 liability.
 
@@ -3390,7 +4425,7 @@ reopened without new information.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **A second engine (LuaJIT and similar)**               | Removed rather than carried. A fallback nobody exercises rots, and this one had: no `svg`, `Input`, `InputState`, state styles, `accessibility_label`, scheduler, host API, sandbox, or overlays. The seam it justified is kept, because it is what makes the rest of the crate name no VM |
 | **The WASM component model**                           | Every call crosses a serialization boundary, which is the worst possible fit for high-frequency fine-grained UI calls. Heavy toolchain, poor debugging                                                                                                                                     |
-| **Embedding Node.js or Deno**                          | The process model and the size do not match an in-process, main-thread, embedded runtime. Bringing npm in brings native dependencies and a supply chain with it. VS Code's approach requires a separate extension process to work at all                                                   |
+| **Embedding Node.js or Deno**                          | The process model, native dependency surface, and size do not match an in-process, main-thread, embedded runtime. VS Code's approach requires a separate extension process to work at all                                                                                                  |
 | **A pure-Rust scripting language** (Rhai, Steel, Koto) | Almost no ecosystem, a new language for every author, and a thin corpus — which is disqualifying for generated interfaces                                                                                                                                                                  |
 | **Rust dylib plugins**                                 | No stable ABI, no sandbox, and the compile cost remains, so it solves none of §2.1                                                                                                                                                                                                         |
 | **Rust hot reload**                                    | Solves only the compile time. It does not address plugin distribution or third-party extension, and state preservation is fragile                                                                                                                                                          |
@@ -3402,19 +4437,19 @@ reopened without new information.
 
 ## 25. Standing Risks
 
-| Risk                                                                                                                                                                                 | Impact    | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Cross-boundary call cost exceeds the budget.** Base-first raises operations per node and style has no batching form                                                                | Contained | Measured under budget at 443 nodes (§20.3), and no longer paid per frame (§8.4); the levers if it regresses are specialized call forms, subtree memoization, virtualization, and finer view granularity                                                                                                                                                                                                                                                                                                                                                                        |
-| **Script render couples to frame rate again.** A repaint that enters the VM puts the whole description cost on the frame budget                                                      | Fatal     | Prevented by the snapshot lifecycle (§8.4) and asserted by benchmark C plus `tests/snapshot.rs` (§20.3). It is a regression test rather than a convention precisely because the coupling is easy to reintroduce and invisible until it is a frame-rate problem                                                                                                                                                                                                                                                                                                                 |
-| **Presentation authority in script means uneven interface quality**                                                                                                                  | High      | Mitigated by the default palette and by `examples/js_todolist/ui.js` as a worked example; a shipped preset (§13.4) and a `gpui-component` module (§14.6) are the real answers                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Bindings drift from upstream**                                                                                                                                                     | High      | The style surface is immune by construction; component bindings have no drift check at all (§14.5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **A continuation resumes against the wrong runtime.** Several runtimes can share one UI thread, so consulting a process/thread global after `await` would cross VM and policy boundaries | Fatal     | **Closed.** Tasks retain `Weak<ShellRuntime>` plus their `Policy` and weak view owner. Runtime shutdown filters the task registry by runtime identity; destroying runtime A leaves runtime B's work intact. Scheduler and failed-render continuation tests cover both cases (§12.3)                                                                                                                                                                                                                                                                                              |
-| **Cycles across two collectors leak**                                                                                                                                                | Medium    | Render-bound callbacks are retired with their snapshot and long-lived ones are owner-bound (§7.4); retained state is a per-runtime `EntityStore` that drops with the runtime. Native module registries live on `Policy`, and runtime-owned persistent values are released before QuickJS is dropped                                                                                                                                                                                                                                                                               |
-| **A symlink escape from a filesystem grant**                                                                                                                                         | Fatal     | **Closed.** The resolver returns an open directory handle rather than a path, and every operation runs against it, so no name is resolved twice — `cap-std`, which is `openat2(RESOLVE_BENEATH)` on Linux and a per-component `openat` walk elsewhere. Two earlier attempts were not enough: comparing strings missed a link entirely, and comparing strings then canonicalizing caught a link that was already there but not one planted between the check and the syscall. `a_symlink_planted_after_the_check_is_still_refused` is the test for the case neither could cover |
-| **Sandbox escape**, with `Eval`, quickjs-libc, and prototype pollution as the largest surfaces                                                                                       | High      | quickjs-libc is not compiled in; prototypes are frozen; every compiler path is closed at the JavaScript level, but the stronger intrinsic-level fix is not done (§19.1). The escape suite is real and asserts on messages                                                                                                                                                                                                                                                                                                                                                      |
-| **Generated code assumes Node or a browser**                                                                                                                                         | Medium    | Named stubs fail with the available replacement or capability boundary, and `gpui.d.ts` moves unsupported API errors into the editor. A complete browser/Node standard library is deliberately outside Core (§3, §19.1)                                                                                                                                                                                                                                                                                                                                                         |
-| **Per-plugin capability grants.** Two loaded plugins must be able to hold different permissions at once                                                                              | High      | Closed. The grant lives on a `Policy` carried by the call frame, so the engine reads the grant of whichever plugin owns the running code, and it survives an `await` (§18.3)                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **Interned `&'static str` accumulates** for script-registered names                                                                                                                  | Low       | Reachable now that panel names are interned (§15). Bounded by applications loaded × panels each, tens of bytes apiece, and never reclaimed — deliberately, because a persisted layout may still refer to a name                                                                                                                                                                                                                                                                                                                                                                |
+| Risk                                                                                                                                                                                     | Impact    | State                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Cross-boundary call cost exceeds the budget.** Base-first raises operations per node and style has no batching form                                                                    | Contained | Measured under budget at 443 nodes (§20.3), and no longer paid per frame (§8.4); the levers if it regresses are specialized call forms, subtree memoization, virtualization, and finer view granularity                                                                                                                                                                                                                                                                                                                                                                        |
+| **Script render couples to frame rate again.** A repaint that enters the VM puts the whole description cost on the frame budget                                                          | Fatal     | Prevented by the snapshot lifecycle (§8.4) and asserted by benchmark C plus `tests/snapshot.rs` (§20.3). It is a regression test rather than a convention precisely because the coupling is easy to reintroduce and invisible until it is a frame-rate problem                                                                                                                                                                                                                                                                                                                 |
+| **Presentation authority in script means uneven interface quality**                                                                                                                      | High      | Mitigated by the default palette and by `examples/js_todolist/ui.js` as a worked example; a shipped preset (§13.4) and a `gpui-component` module (§14.6) are the real answers                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Bindings drift from upstream**                                                                                                                                                         | High      | The style surface is immune by construction; component bindings have no drift check at all (§14.5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **A continuation resumes against the wrong runtime.** Several runtimes can share one UI thread, so consulting a process/thread global after `await` would cross VM and policy boundaries | Fatal     | **Closed.** Tasks retain `Weak<ShellRuntime>` plus their `Policy` and weak view owner. Runtime shutdown filters the task registry by runtime identity; destroying runtime A leaves runtime B's work intact. Scheduler and failed-render continuation tests cover both cases (§12.3)                                                                                                                                                                                                                                                                                            |
+| **Cycles across two collectors leak**                                                                                                                                                    | Medium    | Render-bound callbacks are retired with their snapshot and long-lived ones are owner-bound (§7.4); retained state is a per-runtime `EntityStore` that drops with the runtime. Native module registries live on `Policy`, and runtime-owned persistent values are released before QuickJS is dropped                                                                                                                                                                                                                                                                            |
+| **A symlink escape from a filesystem grant**                                                                                                                                             | Fatal     | **Closed.** The resolver returns an open directory handle rather than a path, and every operation runs against it, so no name is resolved twice — `cap-std`, which is `openat2(RESOLVE_BENEATH)` on Linux and a per-component `openat` walk elsewhere. Two earlier attempts were not enough: comparing strings missed a link entirely, and comparing strings then canonicalizing caught a link that was already there but not one planted between the check and the syscall. `a_symlink_planted_after_the_check_is_still_refused` is the test for the case neither could cover |
+| **Sandbox escape**, with `Eval`, quickjs-libc, and prototype pollution as the largest surfaces                                                                                           | High      | quickjs-libc is not compiled in; prototypes are frozen; every compiler path is closed at the JavaScript level, but the stronger intrinsic-level fix is not done (§19.1). The escape suite is real and asserts on messages                                                                                                                                                                                                                                                                                                                                                      |
+| **Generated code assumes Node or a browser**                                                                                                                                             | Medium    | Named stubs fail with the available replacement or capability boundary, and `gpui-kit.d.ts` moves unsupported API errors into the editor. A complete browser/Node standard library is deliberately outside Core (§3, §19.1)                                                                                                                                                                                                                                                                                                                                                    |
+| **Per-plugin capability grants.** Two loaded plugins must be able to hold different permissions at once                                                                                  | High      | Closed. The grant lives on a `Policy` carried by the call frame, so the engine reads the grant of whichever plugin owns the running code, and it survives an `await` (§18.3)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Interned `&'static str` accumulates** for script-registered names                                                                                                                      | Low       | Reachable now that panel names are interned (§15). Bounded by applications loaded × panels each, tens of bytes apiece, and never reclaimed — deliberately, because a persisted layout may still refer to a name                                                                                                                                                                                                                                                                                                                                                                |
 
 ---
 
@@ -3444,7 +4479,7 @@ Asynchrony: promises bridged to GPUI tasks, job-queue draining, `spawn`,
 unhandled-rejection reporting. Multiple runtimes may coexist; tasks retain their
 originating runtime and policy, and initialization runs only after the final
 `ScriptView` exists. `Link` with an absolute HTTP(S) `.href(...)` opened by the
-host. `ShellRoot` with the dialog stack, one sheet, the
+host. `WebView` with page messages and load events (§14.8). `ShellRoot` with the dialog stack, one sheet, the
 toast stack, focus restoration, and Tab navigation, reached through `cx`. System
 capabilities for asynchronous `fs`, storage, clipboard, `process`,
 scoped HTTP, TCP, and WebSocket, all default-denied. HTTP redirect
@@ -3453,7 +4488,7 @@ surface. Host-registered native modules through
 `native(name)`. Manifest-level `shell-version` compatibility. The sandbox:
 module confinement, compiler withholding, frozen prototypes, absent-global
 stubs, interrupt and memory limits. Hot reload with per-generation module
-invalidation. `gpui.d.ts` generation from the dispatch tables. The CLI, with
+invalidation. `gpui-kit.d.ts` generation from the dispatch tables. The CLI, with
 `check` and `types`. The three-way benchmark of §20.3, including the cached-render
 regression gate.
 
@@ -3473,19 +4508,28 @@ both direct loading and asynchronous initialization under a manifest policy.
 
 ### Not built
 
-`gpui.memo` and every other memoization. Component bindings beyond `div`,
-`text`, `svg`, `Button`, `Link`, `Checkbox`, `Switch`, and `Input` — no Select, Tabs,
-Tree, Table, VirtualList, Radio, Toggle, Popover, Tooltip, or Textarea, and
-therefore no virtualization, which is the largest unrealized performance win.
+`gpui.memo` and every other memoization. The template cache of §20.7 is a
+partial exception and is described there: its instrumentation reports through
+`RuntimeMetrics`, and its mechanism is implemented and tested but reaches no
+script — measuring it showed an automatic wrapper would be worth 1.25×, and
+only a script written for one is worth 3.5×. Of base's components, `Tree` and the
+higher-level `List` are not bound, nor is `Calendar`'s element (§14.2 —
+`CalendarState` is), nor `AlertDialog`'s parts (§14.2), nor `ColorPicker`.
 Semantic state styles (checked, selected, disabled) with base's precedence rules.
-Actions and key bindings. `gpui.open_window` and multi-window
-applications. A contribution registry — no `gpui.command`,
-`gpui.keymap`, `gpui.register_panel`, or `gpui.register_theme`. The capability
-authorization model: prompting, persistence, host policy, and re-asking on
-upgrade. The binding table and the rustdoc-JSON drift check. Packaging and
-distribution. The intrinsic-level `Eval`
-withholding. DevTools and `gc_stats`. State preservation across a reload. A
-shipped preset module. The `gpui-component` binding registry.
+`gpui.open_window` and multi-window applications. A contribution registry — no
+`gpui.command`, `gpui.keymap`, `gpui.register_panel`, or `gpui.register_theme`;
+key bindings exist (§10.6) but are installed by a running script rather than
+declared in a manifest. The capability authorization model: prompting,
+persistence, host policy, and re-asking on upgrade. The binding table and the
+rustdoc-JSON drift check. Packaging and distribution. The intrinsic-level
+`Eval` withholding. DevTools and `gc_stats`. State preservation across a
+reload. A shipped preset module. The `gpui-component` binding registry.
+
+Drag and drop is not bound either, and that is a measurement rather than an
+omission: `crates/story`, which is an application written with the library and
+so is what a script author is, uses `on_drag` and `on_drop` once each, against
+94 uses of `on_action`. The library's own internals use it eighteen times, all
+of them inside `table`, `list` and `dock`.
 
 ---
 
@@ -3559,7 +4603,7 @@ dialog body — and a test loads and renders it, because if it stops rendering t
 quickstart is wrong.
 
 ```js
-import { View } from "gpui";
+import { View } from "gpui-kit";
 import { h_flex, v_flex, InputState } from "gpui-base";
 
 export default class TodoList extends View {
@@ -3600,7 +4644,7 @@ the view (§10.1).
 **`children` takes an array**, so `map` is the natural list form.
 
 **`when(condition, fn)` keeps the chain in one piece**, matching the GPUI
-builder style `CLAUDE.md` requires, instead of splitting into a temporary and a
+builder style `AGENTS.md` requires, instead of splitting into a temporary and a
 sequence of `if`s:
 
 ```js
@@ -3674,7 +4718,7 @@ crates/shell/                 # gpui-shell — depends on gpui-base + gpui only
     view.rs                   # ScriptView — snapshot ownership and invalidation
     assets.rs                 # application-directory asset source
     watch.rs                  # source watching and in-place reload
-    typings.rs                # gpui.d.ts generation
+    typings.rs                # gpui-kit.d.ts generation
     bin/gpui-shell.rs         # run / check / types
   bin/default-tokens.json     # the CLI host's semantic palette, light and dark
   tests/
@@ -3689,7 +4733,7 @@ examples/js_todolist/         # the reference application
 
 ### Appendix C: Naming
 
-Following `CLAUDE.md`:
+Following `AGENTS.md`:
 
 - No `Kind` suffix: `ScopePhase` rather than `ScopeKind`, `ExecuteGrant` rather
   than `CapabilityKind`, `SpecOp` rather than `SpecOpKind`.
