@@ -54,7 +54,7 @@ fn send_scroll(event: ScrollWheelEvent, window: &Window, cx: &mut App) {
     // Mouse listeners are temporarily taken out during dispatch. Re-entering
     // dispatch synchronously would miss the viewport's scroll listeners.
     window.defer(cx, move |window, cx| {
-        window.dispatch_event(PlatformInput::ScrollWheel(event), cx);
+        window.dispatch_event(PlatformInput::Scroll(event), cx);
     });
 }
 
