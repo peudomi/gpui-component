@@ -194,6 +194,8 @@ fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
         ));
     }
 
+    let os = scope::with_current_app(|app| app.platform_info().os)
+        .unwrap_or(gpui::OperatingSystem::Unknown);
     let mut parsed = Vec::with_capacity(bindings.len());
     for (index, binding) in bindings.iter().enumerate() {
         let keystroke: String = binding.get("keystroke").map_err(|_| {
@@ -219,7 +221,7 @@ fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
         // script typo must not take the process down, so both are parsed here
         // where the failure is a thrown error naming the entry.
         for source in keystroke.split_whitespace() {
-            gpui::Keystroke::parse(source).map_err(|error| {
+            gpui::Keystroke::parse_with_os(source, os).map_err(|error| {
                 js_error::type_error(
                     &ctx,
                     &format!("binding {index} has an unparsable keystroke `{source}`: {error:?}"),
@@ -245,9 +247,26 @@ fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
 
     let installed = parsed.len() as u32;
     scope::with_current(|_, app| {
-        app.bind_keys(parsed.into_iter().map(|(keystroke, action, context)| {
-            gpui::KeyBinding::new(&keystroke, ShellAction::new(action), context.as_deref())
-        }));
+        let bindings = parsed
+            .into_iter()
+            .map(|(keystroke, action, context)| {
+                let predicate = context.map(|context| {
+                    gpui::KeyBindingContextPredicate::parse(&context)
+                        .unwrap()
+                        .into()
+                });
+                gpui::KeyBinding::load(
+                    &keystroke,
+                    Box::new(ShellAction::new(action)),
+                    predicate,
+                    false,
+                    None,
+                    app,
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        app.bind_keys(bindings);
     })
     .ok_or_else(|| {
         js_error::type_error(

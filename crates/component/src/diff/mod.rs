@@ -73,8 +73,32 @@ pub(crate) fn init(cx: &mut App) {
         KeyBinding::new("end", Last, Some("Diff")),
         KeyBinding::new("shift-up", ExtendUp, Some("Diff")),
         KeyBinding::new("shift-down", ExtendDown, Some("Diff")),
-        KeyBinding::new("secondary-c", Copy, Some("Diff")),
-        KeyBinding::new("secondary-a", SelectAll, Some("Diff")),
+        KeyBinding::load(
+            "secondary-c",
+            Box::new(Copy),
+            Some(
+                gpui::KeyBindingContextPredicate::parse("Diff")
+                    .unwrap()
+                    .into(),
+            ),
+            false,
+            None,
+            cx,
+        )
+        .unwrap(),
+        KeyBinding::load(
+            "secondary-a",
+            Box::new(SelectAll),
+            Some(
+                gpui::KeyBindingContextPredicate::parse("Diff")
+                    .unwrap()
+                    .into(),
+            ),
+            false,
+            None,
+            cx,
+        )
+        .unwrap(),
     ]);
 }
 

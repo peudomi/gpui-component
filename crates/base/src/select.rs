@@ -23,11 +23,19 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("up", SelectUp, Some(CONTEXT)),
         KeyBinding::new("down", SelectDown, Some(CONTEXT)),
         KeyBinding::new("enter", Confirm { secondary: false }, Some(CONTEXT)),
-        KeyBinding::new(
+        KeyBinding::load(
             "secondary-enter",
-            Confirm { secondary: true },
-            Some(CONTEXT),
-        ),
+            Box::new(Confirm { secondary: true }),
+            Some(
+                gpui::KeyBindingContextPredicate::parse(CONTEXT)
+                    .unwrap()
+                    .into(),
+            ),
+            false,
+            None,
+            cx,
+        )
+        .unwrap(),
         KeyBinding::new("escape", Cancel, Some(CONTEXT)),
     ]);
 }

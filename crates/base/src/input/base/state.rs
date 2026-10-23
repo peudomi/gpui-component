@@ -174,14 +174,22 @@ pub(crate) fn init(cx: &mut App) {
             },
             Some(CONTEXT),
         ),
-        KeyBinding::new(
+        KeyBinding::load(
             "secondary-enter",
-            Enter {
+            Box::new(Enter {
                 secondary: true,
                 shift: false,
-            },
-            Some(CONTEXT),
-        ),
+            }),
+            Some(
+                gpui::KeyBindingContextPredicate::parse(CONTEXT)
+                    .unwrap()
+                    .into(),
+            ),
+            false,
+            None,
+            cx,
+        )
+        .unwrap(),
         KeyBinding::new("escape", Escape, Some(CONTEXT)),
         KeyBinding::new("up", MoveUp, Some(CONTEXT)),
         KeyBinding::new("down", MoveDown, Some(CONTEXT)),
@@ -468,6 +476,9 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(super) input_bounds: Bounds<Pixels>,
     /// The text bounds
     pub(super) last_bounds: Option<Bounds<Pixels>>,
+    /// The fully visible part of the window this input last asked its scroll
+    /// containers to reveal it in, while focused. `None` while unfocused.
+    pub(super) revealed_viewport: Option<Bounds<Pixels>>,
     pub(super) last_selected_range: Option<CursorSelection>,
     pub(super) selecting: bool,
     /// Anchor point of an in-progress columnar (block) selection.
@@ -520,6 +531,9 @@ pub struct InputBaseState<M: InputModeKind> {
     /// freeze in a different place.
     projected_editor_style: InputEditorStyle,
     accessibility: Option<InputAccessibility>,
+    /// What paints in place of Base's editor scrollbar, when a consumer
+    /// supplies its own.
+    pub(super) scrollbar_renderer: Option<crate::input::EditorScrollbarRenderer>,
 
     /// The mask pattern for formatting the input text
     pub(crate) mask_pattern: MaskPattern,
@@ -767,6 +781,8 @@ impl<M: InputModeKind> InputBaseState<M> {
         let wrap_width = (width - RIGHT_MARGIN).max(px(1.));
         self.display_map.set_font(font, font_size, cx);
         self.display_map
+            .set_tab_size(self.mode.tab_size().tab_size, cx);
+        self.display_map
             .on_layout_changed(self.soft_wrap.then_some(wrap_width), cx);
         self.display_map
             .set_wrapping_indent(self.wrapping_indent, cx);
@@ -980,6 +996,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             last_layout: None,
             prepaint_caret_geometry: None,
             last_bounds: None,
+            revealed_viewport: None,
             last_selected_range: None,
             column_select_start: None,
             last_cursor: None,
@@ -997,6 +1014,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             editor_style: InputEditorStyle::default(),
             projected_editor_style: InputEditorStyle::default(),
             accessibility: None,
+            scrollbar_renderer: None,
             diagnostic_popover: None,
             context_menu_handler: None,
             pending_context_menu: None,
@@ -1122,6 +1140,20 @@ impl<M: InputModeKind> InputBaseState<M> {
     #[doc(hidden)]
     pub fn set_editor_paddings(&mut self, paddings: Edges<Pixels>) {
         self.editor_paddings = paddings;
+    }
+
+    /// Supply the element painted in place of the editor's scrollbar, or
+    /// `None` to keep Base's. The renderer is called where the editor paints
+    /// its scrollbar, with that frame's [`EditorScrollbarContext`]. Like
+    /// [`Self::set_editor_style`], this does not notify, so it can be called
+    /// while rendering.
+    ///
+    /// [`EditorScrollbarContext`]: crate::input::EditorScrollbarContext
+    pub fn set_scrollbar_renderer(
+        &mut self,
+        renderer: Option<crate::input::EditorScrollbarRenderer>,
+    ) {
+        self.scrollbar_renderer = renderer;
     }
 
     pub fn apply_highlighter_fold_candidates(
@@ -3873,6 +3905,7 @@ impl<M: InputModeKind> InputBaseState<M> {
     }
 
     fn on_blur(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.revealed_viewport = None;
         if M::is_context_menu_open(self, cx) {
             return;
         }
@@ -6052,7 +6085,7 @@ mod tests {
     use crate::theme::Theme;
     use gpui::{TestAppContext, VisualTestContext, size};
 
-    use crate::input::{EditorMode, EditorState, InputMode, LanguageConfig, TextareaMode};
+    use crate::input::{EditorMode, EditorState, InputMode, LanguageConfig, TabSize, TextareaMode};
 
     fn set_test_syntax_provider(
         provider: Rc<dyn crate::input::SyntaxContextProvider>,
@@ -9259,6 +9292,38 @@ mod tests {
                 assert_eq!(rows, 2);
             }
         }
+    }
+
+    #[gpui::test]
+    fn test_prewrap_uses_the_configured_tab_stops(cx: &mut TestAppContext) {
+        cx.update(crate::init);
+        cx.open_window(size(px(400.), px(100.)), |window, cx| {
+            let font = window.text_style().font();
+            let font_size = px(14.);
+            let font_id = window.text_system().resolve_font(&font);
+            let space_width = window.text_system().layout_width(font_id, font_size, ' ');
+            cx.new(|cx| {
+                let mut state = crate::input::EditorState::new(window, cx)
+                    .tab_size(TabSize {
+                        tab_size: 4,
+                        hard_tabs: true,
+                    })
+                    .default_value("\t\t");
+                for (tab_size, expected_rows) in [(4, 2), (2, 1), (8, 2)] {
+                    state.set_tab_size(
+                        TabSize {
+                            tab_size,
+                            hard_tabs: true,
+                        },
+                        cx,
+                    );
+                    state.prewrap(font.clone(), font_size, space_width * 5. + RIGHT_MARGIN, cx);
+                    assert_eq!(state.display_map().wrap_row_count(), expected_rows);
+                }
+                state
+            });
+            gpui::EmptyView
+        });
     }
 
     /// Prewrap counts with the state's wrapping indent, as the first layout

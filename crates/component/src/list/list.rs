@@ -28,7 +28,19 @@ pub(crate) fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Cancel, context),
         KeyBinding::new("enter", Confirm { secondary: false }, context),
-        KeyBinding::new("secondary-enter", Confirm { secondary: true }, context),
+        KeyBinding::load(
+            "secondary-enter",
+            Box::new(Confirm { secondary: true }),
+            Some(
+                gpui::KeyBindingContextPredicate::parse("List")
+                    .unwrap()
+                    .into(),
+            ),
+            false,
+            None,
+            cx,
+        )
+        .unwrap(),
         KeyBinding::new("up", SelectUp, context),
         KeyBinding::new("down", SelectDown, context),
     ]);
@@ -510,7 +522,7 @@ where
                     this.selected_index = Some(ix);
                     this.on_action_confirm(
                         &Confirm {
-                            secondary: e.modifiers().secondary(),
+                            secondary: e.modifiers().secondary(cx),
                         },
                         window,
                         cx,

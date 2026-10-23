@@ -196,9 +196,13 @@ pub(super) fn register(registry: &mut ComponentRegistry) -> Result<(), RegistryE
                 "Kbd",
                 vec![ArgumentDescriptor::new("keystroke", ArgumentSchema::String)],
                 |arguments| match arguments {
-                    [ComponentArgument::String(value)] => Keystroke::parse(value)
-                        .map(ComponentPayload::new)
-                        .map_err(|error| format!("invalid Kbd keystroke: {error}")),
+                    [ComponentArgument::String(value)] => Keystroke::parse_with_os(
+                        value,
+                        gpui_shell::with_current_app(|app| app.platform_info().os)
+                            .unwrap_or(gpui::OperatingSystem::Unknown),
+                    )
+                    .map(ComponentPayload::new)
+                    .map_err(|error| format!("invalid Kbd keystroke: {error}")),
                     _ => Err("Kbd expects one keystroke string".into()),
                 },
             )])
