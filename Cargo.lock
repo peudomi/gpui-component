@@ -314,7 +314,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -325,7 +325,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -836,7 +836,7 @@ dependencies = [
 [[package]]
 name = "bench_metrics"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "criterion",
@@ -862,7 +862,7 @@ dependencies = [
  "bitflags 2.13.1",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "regex",
@@ -1199,7 +1199,7 @@ dependencies = [
  "maybe-owned",
  "rustix",
  "rustix-linux-procfs",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
  "winx",
 ]
 
@@ -1512,7 +1512,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "gpui_util",
  "indexmap",
@@ -2422,7 +2422,7 @@ dependencies = [
 [[package]]
 name = "derive_refineable"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2511,7 +2511,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2827,7 +2827,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3824,7 +3824,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -3889,7 +3889,7 @@ dependencies = [
  "waker-fn",
  "web-time",
  "windows 0.62.2",
- "zed-scap 0.0.8-zed (git+https://github.com/zed-industries/scap?rev=4afea48c3b002197176fb19cd0f9b180dd36eaac)",
+ "zed-scap 0.0.8-zed (git+https://github.com/zed-industries/scap?rev=b5c86ec58dd4b6b7732bf6ac8be03d6b1f190a82)",
 ]
 
 [[package]]
@@ -4867,7 +4867,7 @@ dependencies = [
 [[package]]
 name = "gpui_apple"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "async-task",
@@ -4878,10 +4878,8 @@ dependencies = [
  "core-foundation-sys 0.8.7",
  "core-graphics 0.24.0",
  "core-text",
- "derive_more 2.1.1",
  "dispatch2",
  "etagere",
- "foreign-types",
  "futures",
  "gpui",
  "gpui_util",
@@ -4889,7 +4887,6 @@ dependencies = [
  "libc",
  "log",
  "mach2 0.6.0",
- "metal",
  "objc2 0.6.4",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -4909,7 +4906,7 @@ dependencies = [
 [[package]]
 name = "gpui_ios"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "block2 0.6.2",
@@ -4930,7 +4927,7 @@ dependencies = [
 [[package]]
 name = "gpui_linux"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -4967,14 +4964,14 @@ dependencies = [
  "wayland-protocols-wlr",
  "x11rb",
  "xkbcommon",
- "zed-scap 0.0.8-zed (git+https://github.com/zed-industries/scap?rev=4afea48c3b002197176fb19cd0f9b180dd36eaac)",
+ "zed-scap 0.0.8-zed (git+https://github.com/zed-industries/scap?rev=b5c86ec58dd4b6b7732bf6ac8be03d6b1f190a82)",
  "zed-xim 0.4.0-zed (git+https://github.com/zed-industries/xim-rs.git?rev=16f35a2c881b815a2b6cdfd6687988e84f8447d8)",
 ]
 
 [[package]]
 name = "gpui_macos"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -4999,6 +4996,7 @@ dependencies = [
  "objc2-core-graphics",
  "objc2-core-video",
  "objc2-foundation 0.3.2",
+ "objc2-uniform-type-identifiers",
  "objc2-user-notifications",
  "parking_lot",
  "raw-window-handle",
@@ -5012,7 +5010,7 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -5023,7 +5021,7 @@ dependencies = [
 [[package]]
 name = "gpui_platform"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -5039,7 +5037,7 @@ dependencies = [
 [[package]]
 name = "gpui_shared_string"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "schemars",
  "serde",
@@ -5049,7 +5047,7 @@ dependencies = [
 [[package]]
 name = "gpui_util"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "log",
@@ -5059,7 +5057,7 @@ dependencies = [
 [[package]]
 name = "gpui_web"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5088,7 +5086,7 @@ dependencies = [
 [[package]]
 name = "gpui_wgpu"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -5115,7 +5113,7 @@ dependencies = [
 [[package]]
 name = "gpui_windows"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -5473,7 +5471,7 @@ dependencies = [
 [[package]]
 name = "http_client"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5491,7 +5489,7 @@ dependencies = [
 [[package]]
 name = "http_client_tls"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "log",
  "rustls",
@@ -7109,7 +7107,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
 dependencies = [
- "proc-macro-crate 3.5.0",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -7197,6 +7195,7 @@ dependencies = [
  "objc2-core-video",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
+ "objc2-uniform-type-identifiers",
 ]
 
 [[package]]
@@ -7409,6 +7408,7 @@ checksum = "a0125f776a10d00af4152d74616409f0d4a2053a6f57fa5b7d6aa2854ac04794"
 dependencies = [
  "bitflags 2.13.1",
  "block2 0.6.2",
+ "dispatch2",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
 ]
@@ -7473,6 +7473,16 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
+]
+
+[[package]]
+name = "objc2-uniform-type-identifiers"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7902ac02859fc1f7045f8b598c63f1ae0cc7efeaa06a9bc9f3d9a3c955974fa4"
+dependencies = [
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -8818,7 +8828,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9178,7 +9188,7 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "derive_refineable",
 ]
@@ -9245,7 +9255,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "reqwest_client"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -9507,7 +9517,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9585,7 +9595,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9669,7 +9679,7 @@ dependencies = [
 [[package]]
 name = "scheduler"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "async-task",
  "backtrace",
@@ -10065,7 +10075,7 @@ version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
- "dirs 6.0.0",
+ "dirs 5.0.1",
 ]
 
 [[package]]
@@ -10259,7 +10269,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -10434,7 +10444,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sum_tree"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#79863bf0360efcd4690ff8bdc91450812507277c"
+source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
 dependencies = [
  "heapless",
  "rayon",
@@ -10728,7 +10738,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -11704,7 +11714,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -12778,7 +12788,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -13935,18 +13945,12 @@ dependencies = [
 [[package]]
 name = "zed-scap"
 version = "0.0.8-zed"
-source = "git+https://github.com/zed-industries/scap?rev=4afea48c3b002197176fb19cd0f9b180dd36eaac#4afea48c3b002197176fb19cd0f9b180dd36eaac"
+source = "git+https://github.com/zed-industries/scap?rev=b5c86ec58dd4b6b7732bf6ac8be03d6b1f190a82#b5c86ec58dd4b6b7732bf6ac8be03d6b1f190a82"
 dependencies = [
  "anyhow",
- "cocoa",
- "core-graphics-helmer-fork",
  "log",
- "objc",
  "rand 0.8.8",
- "screencapturekit",
- "screencapturekit-sys",
  "sysinfo 0.31.4",
- "tao-core-video-sys",
  "windows 0.61.3",
  "windows-capture",
  "x11",
