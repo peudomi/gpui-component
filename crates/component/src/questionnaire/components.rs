@@ -2090,8 +2090,9 @@ mod tests {
         cx.simulate_click(bounds.center(), gpui::Modifiers::default());
     }
 
-    fn press(cx: &mut VisualTestContext, key: &'static str) {
-        let keystroke = Keystroke::parse(key).unwrap();
+    fn press(cx: &mut VisualTestContext, key: &str) {
+        let os = cx.update(|_, cx| cx.platform_info().os);
+        let keystroke = Keystroke::parse_with_os(key, os).unwrap();
         cx.simulate_event(KeyDownEvent {
             keystroke: keystroke.clone(),
             is_held: false,

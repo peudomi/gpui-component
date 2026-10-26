@@ -28,19 +28,15 @@ pub(crate) fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("escape", Cancel, context),
         KeyBinding::new("enter", Confirm { secondary: false }, context),
-        KeyBinding::load(
-            "secondary-enter",
-            Box::new(Confirm { secondary: true }),
-            Some(
-                gpui::KeyBindingContextPredicate::parse("List")
-                    .unwrap()
-                    .into(),
-            ),
-            false,
-            None,
-            cx,
-        )
-        .unwrap(),
+        KeyBinding::new(
+            if cx.platform_info().is_mac() {
+                "cmd-enter"
+            } else {
+                "ctrl-enter"
+            },
+            Confirm { secondary: true },
+            context,
+        ),
         KeyBinding::new("up", SelectUp, context),
         KeyBinding::new("down", SelectDown, context),
     ]);
@@ -879,7 +875,7 @@ mod measurement_tests {
         cx.update(|window, cx| window.draw(cx).clear(cx));
         let state = view.read_with(cx, |view, _| view.0.clone());
         let wheel = |cx: &mut gpui::VisualTestContext, dy| {
-            cx.simulate_event(gpui::ScrollWheelEvent {
+            cx.simulate_event(gpui::ScrollEvent {
                 position: gpui::point(px(100.), px(100.)),
                 delta: gpui::ScrollDelta::Lines(gpui::point(0., dy)),
                 ..Default::default()
@@ -889,7 +885,7 @@ mod measurement_tests {
             (-10000., gpui::TouchPhase::Started),
             (0., gpui::TouchPhase::Ended),
         ] {
-            cx.simulate_event(gpui::ScrollWheelEvent {
+            cx.simulate_event(gpui::ScrollEvent {
                 position: gpui::point(px(100.), px(100.)),
                 delta: gpui::ScrollDelta::Pixels(gpui::point(px(0.), px(dy))),
                 touch_phase: phase,

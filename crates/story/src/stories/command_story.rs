@@ -273,34 +273,55 @@ const STOCKS: [Stock; 10] = [
 
 impl CommandStory {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let context: Rc<KeyBindingContextPredicate> =
-            KeyBindingContextPredicate::parse(COMMAND_CONTEXT)
-                .unwrap()
-                .into();
-        let secondary = |key: &str, action: Box<dyn Action>| {
-            KeyBinding::load(
-                &format!("secondary-{key}"),
-                action,
-                Some(context.clone()),
-                false,
-                None,
-                cx,
-            )
-            .unwrap()
-        };
-        let bindings = [
-            secondary("p", Box::new(OpenProfile)),
-            secondary("b", Box::new(OpenBilling)),
-            secondary("s", Box::new(OpenSettings)),
-            secondary("h", Box::new(GoHome)),
-            secondary("i", Box::new(OpenInbox)),
-            secondary("d", Box::new(OpenDocuments)),
-            secondary("f", Box::new(OpenFolders)),
-            secondary("n", Box::new(NewFile)),
-            secondary("c", Box::new(CopyItem)),
+        let is_mac = cx.platform_info().is_mac();
+        cx.bind_keys([
+            KeyBinding::new(
+                if is_mac { "cmd-p" } else { "ctrl-p" },
+                OpenProfile,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-b" } else { "ctrl-b" },
+                OpenBilling,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-s" } else { "ctrl-s" },
+                OpenSettings,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-h" } else { "ctrl-h" },
+                GoHome,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-i" } else { "ctrl-i" },
+                OpenInbox,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-d" } else { "ctrl-d" },
+                OpenDocuments,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-f" } else { "ctrl-f" },
+                OpenFolders,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-n" } else { "ctrl-n" },
+                NewFile,
+                Some(COMMAND_CONTEXT),
+            ),
+            KeyBinding::new(
+                if is_mac { "cmd-c" } else { "ctrl-c" },
+                CopyItem,
+                Some(COMMAND_CONTEXT),
+            ),
             KeyBinding::new("backspace", DeleteItem, Some(COMMAND_CONTEXT)),
-        ];
-        cx.bind_keys(bindings);
+        ]);
 
         let inline = cx.new(|cx| CommandState::new(window, cx));
         let dialog = cx.new(|cx| CommandState::new(window, cx));

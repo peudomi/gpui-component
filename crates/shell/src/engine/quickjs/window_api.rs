@@ -194,8 +194,8 @@ fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
         ));
     }
 
-    let os = scope::with_current_app(|app| app.platform_info().os)
-        .unwrap_or(gpui::OperatingSystem::Unknown);
+    let os = scope::with_current_app(|cx| cx.platform_info().os)
+        .ok_or_else(|| js_error::type_error(&ctx, "cx.bind_keys() needs a live host call"))?;
     let mut parsed = Vec::with_capacity(bindings.len());
     for (index, binding) in bindings.iter().enumerate() {
         let keystroke: String = binding.get("keystroke").map_err(|_| {
@@ -250,23 +250,23 @@ fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
         let bindings = parsed
             .into_iter()
             .map(|(keystroke, action, context)| {
-                let predicate = context.map(|context| {
-                    gpui::KeyBindingContextPredicate::parse(&context)
-                        .unwrap()
+                let context = context.as_deref().map(|context| {
+                    gpui::KeyBindingContextPredicate::parse(context)
+                        .expect("binding contexts were validated before installation")
                         .into()
                 });
                 gpui::KeyBinding::load(
                     &keystroke,
                     Box::new(ShellAction::new(action)),
-                    predicate,
+                    context,
                     false,
                     None,
                     app,
                 )
-                .unwrap()
             })
-            .collect::<Vec<_>>();
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         app.bind_keys(bindings);
+        Ok::<_, gpui::InvalidKeystrokeError>(())
     })
     .ok_or_else(|| {
         js_error::type_error(
@@ -274,7 +274,8 @@ fn bind_keys(ctx: Ctx<'_>, bindings: Vec<Object<'_>>) -> JsResult<u32> {
             "cx.bind_keys() needs a live host call; call it from init(), an event \
              handler or a task",
         )
-    })?;
+    })?
+    .map_err(|error| js_error::type_error(&ctx, &format!("invalid keybinding: {error}")))?;
     Ok(installed)
 }
 

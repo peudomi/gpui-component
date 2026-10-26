@@ -273,12 +273,7 @@ mod tests {
             assert_eq!(Kbd::format(&Keystroke::parse("cmd--").unwrap()), "⌘-");
             assert_eq!(Kbd::format(&Keystroke::parse("cmd-+").unwrap()), "⌘+");
             assert_eq!(Kbd::format(&Keystroke::parse("cmd-enter").unwrap()), "⌘⏎");
-            assert_eq!(
-                Kbd::format(
-                    &Keystroke::parse_with_os("secondary-f12", gpui::OperatingSystem::Mac).unwrap()
-                ),
-                "⌘F12"
-            );
+            assert_eq!(Kbd::format(&Keystroke::parse("cmd-f12").unwrap()), "⌘F12");
             assert_eq!(
                 Kbd::format(&Keystroke::parse("shift-pagedown").unwrap()),
                 "⇧Page Down"
