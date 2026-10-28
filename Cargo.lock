@@ -314,7 +314,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -325,7 +325,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -836,7 +836,7 @@ dependencies = [
 [[package]]
 name = "bench_metrics"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "criterion",
@@ -1199,7 +1199,7 @@ dependencies = [
  "maybe-owned",
  "rustix",
  "rustix-linux-procfs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
  "winx",
 ]
 
@@ -1512,7 +1512,7 @@ dependencies = [
 [[package]]
 name = "collections"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "gpui_util",
  "indexmap",
@@ -2422,7 +2422,7 @@ dependencies = [
 [[package]]
 name = "derive_refineable"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2511,7 +2511,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2827,7 +2827,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3824,7 +3824,7 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -3836,7 +3836,6 @@ dependencies = [
  "chrono",
  "collections",
  "criterion",
- "ctor",
  "derive_more 2.1.1",
  "embed-resource",
  "etagere",
@@ -4867,7 +4866,7 @@ dependencies = [
 [[package]]
 name = "gpui_apple"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "async-task",
@@ -4906,7 +4905,7 @@ dependencies = [
 [[package]]
 name = "gpui_ios"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "block2 0.6.2",
@@ -4927,7 +4926,7 @@ dependencies = [
 [[package]]
 name = "gpui_linux"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -4971,7 +4970,7 @@ dependencies = [
 [[package]]
 name = "gpui_macos"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -5010,7 +5009,7 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -5021,7 +5020,7 @@ dependencies = [
 [[package]]
 name = "gpui_platform"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -5037,7 +5036,7 @@ dependencies = [
 [[package]]
 name = "gpui_shared_string"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "schemars",
  "serde",
@@ -5047,7 +5046,7 @@ dependencies = [
 [[package]]
 name = "gpui_util"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "log",
@@ -5057,7 +5056,7 @@ dependencies = [
 [[package]]
 name = "gpui_web"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -5086,7 +5085,7 @@ dependencies = [
 [[package]]
 name = "gpui_wgpu"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -5113,7 +5112,7 @@ dependencies = [
 [[package]]
 name = "gpui_windows"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -5471,7 +5470,7 @@ dependencies = [
 [[package]]
 name = "http_client"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5489,7 +5488,7 @@ dependencies = [
 [[package]]
 name = "http_client_tls"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "log",
  "rustls",
@@ -6705,7 +6704,7 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "arrayvec",
  "bit-set 0.11.1",
@@ -6756,7 +6755,7 @@ dependencies = [
 [[package]]
 name = "naga-types"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "hashbrown 0.17.1",
  "indexmap",
@@ -8828,7 +8827,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9188,7 +9187,7 @@ dependencies = [
 [[package]]
 name = "refineable"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "derive_refineable",
 ]
@@ -9255,7 +9254,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "reqwest_client"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "anyhow",
  "bytes",
@@ -9517,7 +9516,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9595,7 +9594,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9679,7 +9678,7 @@ dependencies = [
 [[package]]
 name = "scheduler"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "async-task",
  "backtrace",
@@ -10269,7 +10268,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10444,7 +10443,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sum_tree"
 version = "0.1.0"
-source = "git+https://github.com/peudomi/gpui.git#f2376255beb3f09ff182e40816fc0d1e69420cc3"
+source = "git+https://github.com/peudomi/gpui.git#366f0e425e6404804a22f30f78a0988540f11c59"
 dependencies = [
  "heapless",
  "rayon",
@@ -10738,7 +10737,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11714,7 +11713,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12384,7 +12383,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 [[package]]
 name = "wgpu"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "arrayvec",
  "bitflags 2.13.1",
@@ -12442,7 +12441,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "arrayvec",
  "bit-set 0.11.1",
@@ -12512,7 +12511,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-apple"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "wgpu-hal 30.0.0",
 ]
@@ -12529,7 +12528,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-emscripten"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "wgpu-hal 30.0.0",
 ]
@@ -12546,7 +12545,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-linux-android-bsd"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "wgpu-hal 30.0.0",
 ]
@@ -12554,7 +12553,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-wasm"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "wgpu-hal 30.0.0",
 ]
@@ -12571,7 +12570,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-windows"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "wgpu-hal 30.0.0",
 ]
@@ -12588,7 +12587,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -12696,7 +12695,7 @@ dependencies = [
 [[package]]
 name = "wgpu-naga-bridge"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "naga 30.0.0",
  "wgpu-types 30.0.0",
@@ -12715,7 +12714,7 @@ dependencies = [
 [[package]]
 name = "wgpu-sync"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "cfg-if",
  "lock_api",
@@ -12728,7 +12727,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "30.0.0"
-source = "git+https://github.com/gfx-rs/wgpu?rev=3b3506ea31154edc04de64debda0e780cba2639c#3b3506ea31154edc04de64debda0e780cba2639c"
+source = "git+https://github.com/gfx-rs/wgpu?rev=cddb2f5d80dc0009b2ef6767635140cacf90a007#cddb2f5d80dc0009b2ef6767635140cacf90a007"
 dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
@@ -12788,7 +12787,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
